@@ -226,7 +226,7 @@ const TicketListItem = ({ ticket }) => {
         />
         {ticket.status === "pending" && (
           <ButtonWithSpinner
-            color="#b0b0b0"
+            color="primary"
             variant="contained"
             className={classes.acceptButton}
             size="small"

@@ -1,2 +1,1 @@
-# whaticket-atualizado-saas
-Nova Versão do whaticket SAAS para ser Instalado
+O melhor que o mercado já viu!

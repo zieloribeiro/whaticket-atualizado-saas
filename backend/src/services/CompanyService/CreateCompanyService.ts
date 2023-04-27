@@ -165,7 +165,7 @@ const CreateCompanyService = async (
     },
   });
 
-  //CheckMsgIsGroup
+  //VerFilaCinza
   await Setting.findOrCreate({
     where: {
       companyId: company.id,
@@ -173,7 +173,7 @@ const CreateCompanyService = async (
     },
     defaults: {
       companyId: company.id,
-      key: "call",
+      key: "VerFilaCinza",
       value: "disabled"
     },
   });

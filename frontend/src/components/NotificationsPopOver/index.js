@@ -200,8 +200,8 @@ const NotificationsPopOver = () => {
 
       >
           <ChatIcon />
-        {/* <Badge badgeContent={notifications.length} color="secondary">
-        </Badge> */}
+        {<Badge badgeContent={notifications.length} color="secondary">
+        </Badge> }
       </IconButton>
       <Popover
         disableScrollLock

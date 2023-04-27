@@ -158,5 +158,5 @@ export const remove = async (
       ticketId: +ticketId
     });
 
-  return res.status(200).json({ message: "ticket deleted" });
+  return res.status(200).json({ message: "Atendimento Resetado" });
 };

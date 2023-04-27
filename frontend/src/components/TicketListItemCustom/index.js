@@ -38,6 +38,11 @@ import ClearOutlinedIcon from '@material-ui/icons/ClearOutlined';
 const useStyles = makeStyles((theme) => ({
   ticket: {
     position: "relative",
+    //aqui
+    height: 90,
+    paddingHorizontal: 10,
+    paddingVertical: 0
+    //aqui
   },
 
   pendingTicket: {
@@ -76,7 +81,10 @@ const useStyles = makeStyles((theme) => ({
     justifySelf: "flex-end",
     textAlign: "right",
     position: "relative",
-    top: -13
+    // aqui
+    top: -23,
+    fontSize: 12
+    //aqui
   },
 
   closedBadge: {
@@ -119,12 +127,14 @@ const useStyles = makeStyles((theme) => ({
 
   ticketInfo: {
     position: "relative",
-    top: -13
+    // aqui top: -13
+    top: 0
   },
 
   ticketInfo1: {
     position: "relative",
-    top: 13,
+    // aqui top: 13,
+    top: 35,
     right: 0
   },
   Radiusdot: {
@@ -246,21 +256,25 @@ const TicketListItemCustom = ({ ticket }) => {
                 position: "inherit",
                 borderRadius: 2,
                 color: "white",
+                // aqui marginTop: 10,
+                // aqui marginRight: 10,
                 top: -6
               }}
               badgeContent={ticket.queue?.name || "Sem fila"}
             //color="primary"
             />
           )}
-          {ticket.status === "open" && (
+          {ticket.status === "open"  && profile === "admin" && (
             <Tooltip title="Fechar Conversa">
               <ClearOutlinedIcon
                 onClick={() => handleCloseTicket(ticket.id)}
                 fontSize="small"
                 style={{
                   color: red[700],
+                  verticalAlign: "middle",
                   cursor: "pointer",
-                  marginRight: 5,
+                  marginRight: 5, //aqui foi adicionado
+                  marginTop: -10, //coloquei por conta..
                 }}
               />
             </Tooltip>
@@ -273,6 +287,7 @@ const TicketListItemCustom = ({ ticket }) => {
                 style={{
                   color: blue[700],
                   cursor: "pointer",
+                  // aqui verticalAlign: "middle",
                   marginRight: 5,
                 }}
               />
@@ -303,21 +318,25 @@ const TicketListItemCustom = ({ ticket }) => {
                 position: "inherit",
                 borderRadius: 2,
                 color: "white",
+                // aqui marginTop: 10,
+                // aqui marginRight: 10,
                 top: -6
               }}
               badgeContent={ticket.queue?.name || "Sem fila"}
             //color=
             />
           )}
-          {ticket.status === "pending" && (
+          {ticket.status === "pending"  && profile === "admin" && (
             <Tooltip title="Fechar Conversa">
               <ClearOutlinedIcon
                 onClick={() => handleCloseTicket(ticket.id)}
                 fontSize="small"
                 style={{
                   color: red[700],
+                  verticalAlign: "middle",
                   cursor: "pointer",
-                  marginRight: 5,
+                  marginRight: 5, // aqui
+                  marginTop: -10, //coloquei por conta..
                 }}
               />
             </Tooltip>
@@ -330,15 +349,16 @@ const TicketListItemCustom = ({ ticket }) => {
               />
             </Tooltip>
           )}
-          {ticket.status === "open" && (
+          {ticket.status === "open" && profile === "admin" && (
             <Tooltip title="Fechar Conversa">
               <ClearOutlinedIcon
                 onClick={() => handleCloseTicket(ticket.id)}
                 fontSize="small"
                 style={{
                   color: red[700],
+                  verticalAlign: "middle",
                   cursor: "pointer",
-                  marginRight: 5,
+                  marginRight: 5, //aqui
                 }}
               />
             </Tooltip>
@@ -351,12 +371,24 @@ const TicketListItemCustom = ({ ticket }) => {
                 style={{
                   color: blue[700],
                   cursor: "pointer",
+                  // aqui verticalAlign: "middle",
                   marginRight: 5,
                 }}
               />
             </Tooltip>
           )}
           {ticket.status === "pending" && (
+
+/* botao do dev aqui <ButtonWithSpinner
+loading={loading}
+size="small"
+variant="contained"
+color="primary"
+onClick={e => handleAcepptTicket(ticket.id)}
+>
+{i18n.t("messagesList.header.buttons.accept")}
+</ButtonWithSpinner>
+*/
             <Tooltip title="Aceitar Conversa">
               <DoneIcon
                 onClick={() => handleAcepptTicket(ticket.id)}
@@ -416,11 +448,21 @@ const TicketListItemCustom = ({ ticket }) => {
                 variant="body2"
                 color="textPrimary"
               >
+              
+              
+              
+              {ticket.channel === "whatsapp" && (
+                  <Tooltip title={`Atribuido à ${ticketUser}`}>
+                    <WhatsAppIcon fontSize="inherit" style={{ color: grey[700] }} />
+                  </Tooltip>
+                )}{' '}
+            
                 {ticket.contact.name}
-              </Typography>
-              <ListItemSecondaryAction>
-                <Box className={classes.ticketInfo1}>{renderTicketInfo()}</Box>
-              </ListItemSecondaryAction>
+              </Typography> 
+              
+              
+              
+              
             </span>
           }
           secondary={
@@ -432,8 +474,14 @@ const TicketListItemCustom = ({ ticket }) => {
                 variant="body2"
                 color="textSecondary"
               > {ticket.lastMessage.includes('data:image/png;base64') ? <MarkdownWrapper> Localização</MarkdownWrapper> : <MarkdownWrapper>{ticket.lastMessage}</MarkdownWrapper>}
-                {ticket.lastMessage === "" ? <br /> : <MarkdownWrapper>{ticket.lastMessage}</MarkdownWrapper>}
+                {/* {ticket.lastMessage === "" ? <br /> : <MarkdownWrapper>{ticket.lastMessage}</MarkdownWrapper>} */}
+
               </Typography>
+              
+              <ListItemSecondaryAction>
+                <Box className={classes.ticketInfo1}>{renderTicketInfo()}</Box>
+              </ListItemSecondaryAction>
+              
             </span>
 
           }

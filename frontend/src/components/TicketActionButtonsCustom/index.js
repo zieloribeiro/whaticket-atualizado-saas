@@ -16,7 +16,7 @@ import CheckCircleIcon from '@material-ui/icons/CheckCircle';
 import UndoRoundedIcon from '@material-ui/icons/UndoRounded';
 import Tooltip from '@material-ui/core/Tooltip';
 import { green } from '@material-ui/core/colors';
-
+import AcceptTicketWithoutSelectQueue from "../AcceptTicketWithoutQueueModal";
 
 const useStyles = makeStyles(theme => ({
 	actionButtons: {
@@ -38,6 +38,7 @@ const TicketActionButtonsCustom = ({ ticket }) => {
 	const ticketOptionsMenuOpen = Boolean(anchorEl);
 	const { user } = useContext(AuthContext);
 	const { setCurrentTicket } = useContext(TicketsContext);
+	const [AcceptTicketWithoutSelectQueueOpen, setAcceptTicketWithoutSelectQueueOpen] = useState(false);
 
 	const customTheme = createTheme({
 		palette: {
@@ -74,18 +75,36 @@ const TicketActionButtonsCustom = ({ ticket }) => {
 		}
 	};
 
+	const handleOpenAcceptTicketWithoutSelectQueue = () => {
+		setAcceptTicketWithoutSelectQueueOpen(true);
+	  };
+
 	return (
+
+
 		<div className={classes.actionButtons}>
-			{ticket.status === "closed" && (
-				<ButtonWithSpinner
-					loading={loading}
-					startIcon={<Replay />}
-					size="small"
-					onClick={e => handleUpdateTicketStatus(e, "open", user?.id)}
-				>
-					{i18n.t("messagesList.header.buttons.reopen")}
-				</ButtonWithSpinner>
-			)}
+
+
+{ticket.status === "closed" && (
+    <>
+      <ButtonWithSpinner
+        loading={loading}
+        startIcon={<Replay />}
+        size="small"
+        //onClick={e => handleUpdateTicketStatus(e, "open", user?.id)}
+        onClick={e => handleOpenAcceptTicketWithoutSelectQueue()}
+      >
+        {i18n.t("messagesList.header.buttons.reopen")}
+      </ButtonWithSpinner>
+
+      <AcceptTicketWithoutSelectQueue 
+        modalOpen={AcceptTicketWithoutSelectQueueOpen}
+        onClose={(e) => setAcceptTicketWithoutSelectQueueOpen(false)}
+        ticketId={ticket.id} 
+      />
+    </>
+  )}
+  
 			{ticket.status === "open" && (
 				<>
 					<Tooltip title={i18n.t("messagesList.header.buttons.return")}>

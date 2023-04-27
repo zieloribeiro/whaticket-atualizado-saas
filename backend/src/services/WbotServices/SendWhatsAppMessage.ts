@@ -4,7 +4,7 @@ import AppError from "../../errors/AppError";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
-
+import { verifyMessage } from "../WbotServices/wbotMessageListener";
 import formatBody from "../../helpers/Mustache";
 
 interface Request {
@@ -66,6 +66,9 @@ const SendWhatsAppMessage = async ({
         ...options
       }
     );
+
+    await verifyMessage(sentMessage, ticket, ticket.contact);
+
     await ticket.update({ lastMessage: formatBody(body, ticket.contact) });
     return sentMessage;
   } catch (err) {

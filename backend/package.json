@@ -18,7 +18,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@adiwajshing/baileys": "github:Yard-Team/Baileys",
+    "@adiwajshing/baileys": "github:WhiskeysSockets/Baileys",
     "@adiwajshing/keyed-db": "^0.2.4",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@hapi/boom": "^9.1.4",

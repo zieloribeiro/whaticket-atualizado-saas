@@ -42,6 +42,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     greetingMessage,
     complationMessage,
     outOfHoursMessage,
+    ratingMessage,
     queueIds,
     token
   }: WhatsappData = req.body;
@@ -53,6 +54,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     isDefault,
     greetingMessage,
     complationMessage,
+    ratingMessage,
     outOfHoursMessage,
     queueIds,
     companyId,

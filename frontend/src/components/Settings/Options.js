@@ -85,13 +85,14 @@ export default function Options(props) {
   const [callType, setCallType] = useState("enabled");
   const [chatbotType, setChatbotType] = useState("");
   const [CheckMsgIsGroup, setCheckMsgIsGroupType] = useState("enabled");
+  const [VerFilaCinza, setVerFilaCinzaType] = useState("enabled");
 
   const [loadingUserRating, setLoadingUserRating] = useState(false);
   const [loadingScheduleType, setLoadingScheduleType] = useState(false);
   const [loadingCallType, setLoadingCallType] = useState(false);
   const [loadingChatbotType, setLoadingChatbotType] = useState(false);
   const [loadingCheckMsgIsGroup, setCheckMsgIsGroup] = useState(false);
-
+  const [loadingVerFilaCinza, setVerFilaCinza] = useState(false);
 
   const [ipixcType, setIpIxcType] = useState("");
   const [loadingIpIxcType, setLoadingIpIxcType] = useState(false);
@@ -128,6 +129,10 @@ export default function Options(props) {
       if (CheckMsgIsGroup) {
         setCheckMsgIsGroupType(CheckMsgIsGroup.value);
       }
+      const VerFilaCinza = settings.find((s) => s.key === "VerFilaCinza");
+      if (VerFilaCinza) {
+        setVerFilaCinzaType(VerFilaCinza.value);
+      }      
       const chatbotType = settings.find((s) => s.key === "chatBotType");
       if (chatbotType) {
         setChatbotType(chatbotType.value);
@@ -234,6 +239,17 @@ export default function Options(props) {
     /*     if (typeof scheduleTypeChanged === "function") {
           scheduleTypeChanged(value);
         } */
+  }
+
+  async function handleFilaCinzaType(value) {
+    setVerFilaCinzaType(value);
+    setVerFilaCinza(true);
+    await update({
+      key: "VerFilaCinza",
+      value,
+    });
+    toast.success("User's ver Fechados Fila Cinza atualizada com sucesso.");
+    setVerFilaCinza(false);
   }
 
   async function handleChangeIPIxc(value) {
@@ -406,6 +422,31 @@ export default function Options(props) {
             </FormHelperText>
           </FormControl>
         </Grid>
+
+        <Grid xs={12} sm={6} md={4} item>
+          <FormControl className={classes.selectContainer}>
+            <InputLabel id="group-type-label">
+            User ver Fechados Fila Cinza
+            </InputLabel>
+            <Select
+              labelId="group-type-label"
+              value={VerFilaCinza}
+              onChange={async (e) => {
+                handleFilaCinzaType(e.target.value);
+              }}
+            >
+              <MenuItem value={"disabled"}>Desativado</MenuItem>
+              <MenuItem value={"enabled"}>Ativado</MenuItem>
+            </Select>
+            <FormHelperText>
+              {loadingVerFilaCinza && "Atualizando..."}
+            </FormHelperText>
+          </FormControl>
+        </Grid>
+
+
+
+     {/*}   
       </Grid>
       <Grid spacing={3} container>
         <Tabs
@@ -426,7 +467,7 @@ export default function Options(props) {
         </Tabs>
 
       </Grid>
-      {/*-----------------IXC-----------------*/}
+      {/*-----------------IXC-----------------}
       <Grid spacing={3} container
         style={{ marginBottom: 10 }}>
         <Tabs
@@ -480,7 +521,7 @@ export default function Options(props) {
           </FormControl>
         </Grid>
       </Grid>
-      {/*-----------------MK-AUTH-----------------*/}
+      {/*-----------------MK-AUTH-----------------}
       <Grid spacing={3} container
         style={{ marginBottom: 10 }}>
         <Tabs
@@ -551,7 +592,7 @@ export default function Options(props) {
           </FormControl>
         </Grid>
       </Grid>
-      {/*-----------------ASAAS-----------------*/}
+      {/*-----------------ASAAS----------------/}
       <Grid spacing={3} container
         style={{ marginBottom: 10 }}>
         <Tabs
@@ -582,8 +623,8 @@ export default function Options(props) {
               {loadingAsaasType && "Atualizando..."}
             </FormHelperText>
           </FormControl>
-        </Grid>
-      </Grid>
+        </Grid>*/}
+            </Grid> 
     </>
   );
 }

@@ -36,6 +36,7 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import { Can } from "../../components/Can";
 import NewTicketModal from "../../components/NewTicketModal";
 import { socketConnection } from "../../services/socket";
+import {CSVLink} from 'react-csv';
 
 const reducer = (state, action) => {
   if (action.type === "LOAD_CONTACTS") {
@@ -292,6 +293,13 @@ const Contacts = () => {
           >
             {i18n.t("contacts.buttons.add")}
           </Button>
+          <CSVLink style={{ textDecoration:'none'}} separator=";" filename={'contato_multiconversa.csv'} data={contacts.map((contact) => ({ name: contact.name, number: contact.number, email: contact.email }))}>
+		   <Button
+		    variant="contained"
+		    color="primary">
+		    EXPORTAR CONTATOS
+		   </Button>
+		  </CSVLink>
         </MainHeaderButtonsWrapper>
       </MainHeader>
       <Paper

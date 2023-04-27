@@ -5,6 +5,7 @@ import AppError from "../errors/AppError";
 
 import UpdateSettingService from "../services/SettingServices/UpdateSettingService";
 import ListSettingsService from "../services/SettingServices/ListSettingsService";
+import ShowSettingsService from "../services/SettingServices/ShowSettingsService";
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
@@ -16,6 +17,15 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   const settings = await ListSettingsService({ companyId });
 
   return res.status(200).json(settings);
+};
+
+
+export const show = async (req: Request, res: Response): Promise<Response> => {
+  const { settingKey } = req.params;
+
+  const setting = await ShowSettingsService(settingKey);
+
+  return res.status(200).json(setting);
 };
 
 export const update = async (

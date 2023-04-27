@@ -1,6 +1,7 @@
 import { getIO } from "../../libs/socket";
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
+import { logger } from "../../utils/logger";
 
 interface MessageData {
   id: string;
@@ -41,13 +42,14 @@ const CreateMessageService = async ({
     ]
   });
 
-  if (message.ticket.queueId !== null && message.queueId === null) {
+ if (message.ticket.queueId !== null && message.queueId === null) {
     await message.update({ queueId: message.ticket.queueId });
   }
 
   if (!message) {
     throw new Error("ERR_CREATING_MESSAGE");
   }
+
 
   const io = getIO();
   io.to(message.ticketId.toString())

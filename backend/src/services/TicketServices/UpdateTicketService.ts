@@ -83,7 +83,7 @@ const UpdateTicketService = async ({
 
       if (setting?.value === "enabled") {
         if (ticketTraking.ratingAt == null) {
-          const ratingTxt = ratingMessage || "";
+          const ratingTxt = "Pesquisa da Satisfação";
           let bodyRatingMessage = `\u200e${ratingTxt}\n\n`;
           bodyRatingMessage +=
             "Digite de 1 à 3 para qualificar nosso atendimento:\n*1* - _Insatisfeito_\n*2* - _Satisfeito_\n*3* - _Muito Satisfeito_\n\n";
@@ -104,12 +104,21 @@ const UpdateTicketService = async ({
         }
         ticketTraking.ratingAt = moment().toDate();
         ticketTraking.rated = false;
-      }
+
+      if (!isNil(ratingMessage) && ratingMessage !== "") {
+        const body = `\u200e${ratingMessage}`;
+        await SendWhatsAppMessage({ body, ticket });
+
+      }    
+
+      }else{
 
       if (!isNil(complationMessage) && complationMessage !== "") {
         const body = `\u200e${complationMessage}`;
         await SendWhatsAppMessage({ body, ticket });
       }
+
+    }
 
       ticketTraking.finishedAt = moment().toDate();
       ticketTraking.whatsappId = ticket.whatsappId;
@@ -121,6 +130,8 @@ const UpdateTicketService = async ({
 
     if (queueId !== undefined && queueId !== null) {
       ticketTraking.queuedAt = moment().toDate();
+
+      
     }
 
     if (oldQueueId !== queueId && !isNil(oldQueueId) && !isNil(queueId)) {
