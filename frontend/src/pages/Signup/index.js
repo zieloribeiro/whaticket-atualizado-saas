@@ -30,7 +30,6 @@ import { i18n } from "../../translate/i18n";
 import { openApi } from "../../services/api";
 import toastError from "../../errors/toastError";
 import moment from "moment";
-import logo from "../../assets/logo.png";
 // const Copyright = () => {
 // 	return (
 // 		<Typography variant="body2" color="textSecondary" align="center">
@@ -86,7 +85,7 @@ const SignUp = () => {
 	const initialState = { name: "", email: "", password: "", planId: "", };
 
 	const [user] = useState(initialState);
-	const dueDate = moment().add(1, "day").format();
+	const dueDate = moment().add(3, "day").format();
 	const handleSignUp = async values => {
 		Object.assign(values, { recurrence: "MENSAL" });
 		Object.assign(values, { dueDate: dueDate });
@@ -118,9 +117,9 @@ const SignUp = () => {
 		<Container component="main" maxWidth="xs">
 			<CssBaseline />
 			<div className={classes.paper}>
-				<div>
-					<center><img style={{ margin: "0 auto", width: "70%" }} src={logo} alt="Logocadastro" /></center>
-				</div>
+				<Avatar className={classes.avatar}>
+					<LockOutlinedIcon />
+				</Avatar>
 				<Typography component="h1" variant="h5">
 					{i18n.t("signup.title")}
 				</Typography>

@@ -102,6 +102,33 @@ class Whatsapp extends Model<Whatsapp> {
 
   @Column
   token: string;
+  
+  @Column(DataType.TEXT)
+  facebookUserId: string;
+  
+  @Column(DataType.TEXT)
+  facebookUserToken: string;
+
+  @Column(DataType.TEXT)
+  facebookPageUserId: string;
+
+  @Column(DataType.TEXT)
+  tokenMeta: string;
+
+  @Column(DataType.TEXT)
+  channel: string;
+
+  @Default("")
+  @Column(DataType.TEXT)
+  expiresTicket: string;
+
+  @Default(false)
+  @Column
+  useNPS: boolean;
+
+  @Default("")
+  @Column(DataType.TEXT)
+  expiresTicketNPS
 }
 
 export default Whatsapp;

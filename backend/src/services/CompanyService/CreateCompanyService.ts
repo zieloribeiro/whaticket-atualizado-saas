@@ -7,8 +7,8 @@ import Setting from "../../models/Setting";
 interface CompanyData {
   name: string;
   phone?: string;
-  email?: string;
   password?: string;
+  email?: string;
   status?: boolean;
   planId?: number;
   campaignsEnabled?: boolean;
@@ -66,14 +66,20 @@ const CreateCompanyService = async (
     dueDate,
     recurrence
   });
-
-  const user = await User.create({
-    name: company.name,
-    email: company.email,
-    password: companyData.password,
-    profile: "admin",
-    companyId: company.id
+  const [user, created] = await User.findOrCreate({
+    where: { name, email },
+    defaults: {
+      name: name,
+      email: email,
+      password: password || "mudar123",
+      profile: "admin",
+      companyId: company.id
+    }
   });
+
+  if (!created) {
+    await user.update({ companyId: company.id });
+  }
 
   await Setting.findOrCreate({
     where: {
@@ -165,7 +171,7 @@ const CreateCompanyService = async (
     },
   });
 
-  //VerFilaCinza
+  //CheckMsgIsGroup
   await Setting.findOrCreate({
     where: {
       companyId: company.id,
@@ -173,7 +179,7 @@ const CreateCompanyService = async (
     },
     defaults: {
       companyId: company.id,
-      key: "VerFilaCinza",
+      key: "call",
       value: "disabled"
     },
   });

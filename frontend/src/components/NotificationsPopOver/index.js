@@ -10,10 +10,9 @@ import List from "@material-ui/core/List";
 import ListItem from "@material-ui/core/ListItem";
 import ListItemText from "@material-ui/core/ListItemText";
 import { makeStyles } from "@material-ui/core/styles";
-import Badge from "@material-ui/core/Badge";
 import ChatIcon from "@material-ui/icons/Chat";
 
-import TicketListItem from "../TicketListItem";
+import TicketListItemCustom from "../TicketListItemCustom";
 import { i18n } from "../../translate/i18n";
 import useTickets from "../../hooks/useTickets";
 import alertSound from "../../assets/sound.mp3";
@@ -60,23 +59,30 @@ const NotificationsPopOver = () => {
 
   const historyRef = useRef(history);
 
-	useEffect(() => {
-		soundAlertRef.current = play;
+  useEffect(() => {
+    soundAlertRef.current = play;
 
-		if (!("Notification" in window)) {
-			console.log("This browser doesn't support notifications");
-		} else {
-			Notification.requestPermission();
-		}
-	}, [play]);
+    if (!("Notification" in window)) {
+      console.log("This browser doesn't support notifications");
+    } else {
+      Notification.requestPermission();
+    }
+  }, [play]);
 
-	useEffect(() => {
-		setNotifications(tickets);
-	}, [tickets]);
+  useEffect(() => {
 
-	useEffect(() => {
-		ticketIdRef.current = ticketIdUrl;
-	}, [ticketIdUrl]);
+    const queueIds = queues.map((q) => q.id);
+    const filteredTickets = tickets.filter((t) => queueIds.indexOf(t.queueId) > -1);
+    if (profile === "user") {
+      setNotifications(filteredTickets);
+    } else {
+      setNotifications(tickets);
+    }
+  }, [tickets, queues, profile]);
+
+  useEffect(() => {
+    ticketIdRef.current = ticketIdUrl;
+  }, [ticketIdUrl]);
 
   useEffect(() => {
     const companyId = localStorage.getItem("companyId");
@@ -88,54 +94,58 @@ const NotificationsPopOver = () => {
 
     socket.on(`company-${companyId}-ticket`, (data) => {
       if (data.action === "updateUnread" || data.action === "delete") {
-				setNotifications(prevState => {
-					const ticketIndex = prevState.findIndex(t => t.id === data.ticketId);
-					if (ticketIndex !== -1) {
-						prevState.splice(ticketIndex, 1);
-						return [...prevState];
-					}
-					return prevState;
-				});
+        setNotifications(prevState => {
+          const ticketIndex = prevState.findIndex(t => t.id === data.ticketId);
+          if (ticketIndex !== -1) {
+            prevState.splice(ticketIndex, 1);
+            return [...prevState];
+          }
+          return prevState;
+        });
 
-				setDesktopNotifications(prevState => {
-					const notfiticationIndex = prevState.findIndex(
-						n => n.tag === String(data.ticketId)
-					);
-					if (notfiticationIndex !== -1) {
-						prevState[notfiticationIndex].close();
-						prevState.splice(notfiticationIndex, 1);
-						return [...prevState];
-					}
-					return prevState;
-				});
+        setDesktopNotifications(prevState => {
+          const notfiticationIndex = prevState.findIndex(
+            n => n.tag === String(data.ticketId)
+          );
+          if (notfiticationIndex !== -1) {
+            prevState[notfiticationIndex].close();
+            prevState.splice(notfiticationIndex, 1);
+            return [...prevState];
+          }
+          return prevState;
+        });
       }
     });
 
     socket.on(`company-${companyId}-appMessage`, (data) => {
-			if (
-				data.action === "create" &&
-				!data.message.read &&
-				(data.ticket.userId === user?.id || !data.ticket.userId)
-			) {
-				setNotifications(prevState => {
-					const ticketIndex = prevState.findIndex(t => t.id === data.ticket.id);
-					if (ticketIndex !== -1) {
-						prevState[ticketIndex] = data.ticket;
-						return [...prevState];
-					}
-					return [data.ticket, ...prevState];
-				});
+      if (
+        data.action === "create" &&
+        !data.message.read &&
+        (data.ticket.userId === user?.id || !data.ticket.userId)
+      ) {
 
-				const shouldNotNotificate =
-					(data.message.ticketId === ticketIdRef.current &&
-						document.visibilityState === "visible") ||
-					(data.ticket.userId && data.ticket.userId !== user?.id) ||
-					data.ticket.isGroup;
+        if (profile === "user" && (queueIds.indexOf(data.ticket.queue?.id) === -1 || data.ticket.queue === null))
+          return;
 
-				if (shouldNotNotificate) return;
+        setNotifications(prevState => {
+          const ticketIndex = prevState.findIndex(t => t.id === data.ticket.id);
+          if (ticketIndex !== -1) {
+            prevState[ticketIndex] = data.ticket;
+            return [...prevState];
+          }
+          return [data.ticket, ...prevState];
+        });
 
-				handleNotifications(data);
-			}
+        const shouldNotNotificate =
+          (data.message.ticketId === ticketIdRef.current &&
+            document.visibilityState === "visible") ||
+          (data.ticket.userId && data.ticket.userId !== user?.id) ||
+          data.ticket.isGroup || data.ticket.chatbot
+          || user.queues.map(q => q.id).indexOf(data.ticket.queueId) === -1;
+        if (shouldNotNotificate) return;
+
+        handleNotifications(data);
+      }
     });
 
     return () => {
@@ -199,9 +209,7 @@ const NotificationsPopOver = () => {
         variant="contained"
 
       >
-          <ChatIcon />
-        {<Badge badgeContent={notifications.length} color="secondary">
-        </Badge> }
+        <ChatIcon />
       </IconButton>
       <Popover
         disableScrollLock
@@ -226,7 +234,7 @@ const NotificationsPopOver = () => {
           ) : (
             notifications.map((ticket) => (
               <NotificationTicket key={ticket.id}>
-                <TicketListItem ticket={ticket} />
+                <TicketListItemCustom ticket={ticket} />
               </NotificationTicket>
             ))
           )}

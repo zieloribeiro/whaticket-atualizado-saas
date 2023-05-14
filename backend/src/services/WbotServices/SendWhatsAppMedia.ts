@@ -24,7 +24,7 @@ const processAudio = async (audio: string): Promise<string> => {
       `${ffmpegPath.path} -i ${audio} -vn -ab 128k -ar 44100 -f ipod ${outputAudio} -y`,
       (error, _stdout, _stderr) => {
         if (error) reject(error);
-        fs.unlinkSync(audio);
+        // fs.unlinkSync(audio);
         resolve(outputAudio);
       }
     );
@@ -38,7 +38,7 @@ const processAudioFile = async (audio: string): Promise<string> => {
       `${ffmpegPath.path} -i ${audio} -vn -ar 44100 -ac 2 -b:a 192k ${outputAudio}`,
       (error, _stdout, _stderr) => {
         if (error) reject(error);
-        fs.unlinkSync(audio);
+        // fs.unlinkSync(audio);
         resolve(outputAudio);
       }
     );

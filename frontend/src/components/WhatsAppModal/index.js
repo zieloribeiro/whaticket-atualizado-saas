@@ -69,6 +69,9 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
     isDefault: false,
     token: "",
     provider: "beta",
+    useNPS: false,
+    expiresTicketNPS: 3,
+    expiresTicket: 0,
   };
   const [whatsApp, setWhatsApp] = useState(initialState);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);
@@ -155,6 +158,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                         margin="dense"
                         className={classes.textField}
                       />
+
                     </Grid>
                     <Grid style={{ paddingTop: 15 }} item>
                       <FormControlLabel
@@ -168,6 +172,20 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                         }
                         label={i18n.t("whatsappModal.form.default")}
                       />
+                    </Grid>
+
+                    <Grid item>
+                    <Field
+                        as={TextField}
+                        label={'Encerrar chat após x horas'}
+                        name="expiresTicket"
+                        error={touched.expiresTicket && Boolean(errors.expiresTicket)}
+                        helperText={touched.expiresTicket && errors.expiresTicket}
+                        variant="outlined"
+                        margin="dense"
+                        className={classes.textFieldTime}
+                      />
+
                     </Grid>
                   </Grid>
                 </div>

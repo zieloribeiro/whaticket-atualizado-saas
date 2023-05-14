@@ -1,11 +1,11 @@
 import React, { useState, useContext } from "react";
-// import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink } from "react-router-dom";
 
 import Button from "@material-ui/core/Button";
 import CssBaseline from "@material-ui/core/CssBaseline";
 import TextField from "@material-ui/core/TextField";
-// import Link from "@material-ui/core/Link";
-// import Grid from "@material-ui/core/Grid";
+import Link from "@material-ui/core/Link";
+import Grid from "@material-ui/core/Grid";
 import Box from "@material-ui/core/Box";
 import Typography from "@material-ui/core/Typography";
 import { makeStyles } from "@material-ui/core/styles";
@@ -14,7 +14,7 @@ import Container from "@material-ui/core/Container";
 import { i18n } from "../../translate/i18n";
 
 import { AuthContext } from "../../context/Auth/AuthContext";
-import logo from "../../assets/logo.png";
+import logo from "../../assets/logoLoginOption.png";
 
 
 // const Copyright = () => {
@@ -71,11 +71,11 @@ const Login = () => {
 			<CssBaseline />
 			<div className={classes.paper}>
 				<div>
-					<center><img style={{ margin: "0 auto", width: "70%" }} src={logo} alt="logologin" /></center>
+					<img style={{ margin: "0 auto", height: "80px", width: "100%" }} src={logo} alt="Whats" />
 				</div>
-				<Typography component="h1" variant="h5">
+				{/* <Typography component="h1" variant="h5">
 					{i18n.t("login.title")}
-				</Typography>
+				</Typography> */}
 				<form className={classes.form} noValidate onSubmit={handlSubmit}>
 					<TextField
 						variant="outlined"
@@ -112,7 +112,7 @@ const Login = () => {
 					>
 						{i18n.t("login.buttons.submit")}
 					</Button>
-					{/*<Grid container>
+					<Grid container>
 						<Grid item>
 							<Link
 								href="#"
@@ -123,7 +123,7 @@ const Login = () => {
 								{i18n.t("login.buttons.register")}
 							</Link>
 						</Grid>
-					</Grid>*/}
+					</Grid>
 				</form>
 			</div>
 			<Box mt={8}>{/* <Copyright /> */}</Box>

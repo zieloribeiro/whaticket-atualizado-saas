@@ -18,6 +18,12 @@ interface Request {
   isDefault?: boolean;
   token?: string;
   provider?: string;
+  facebookUserId?: string;
+  facebookUserToken?: string;
+  tokenMeta?: string;
+  channel?: string;
+  facebookPageUserId?: string;
+  expiresTicket?: string;
 }
 
 interface Response {
@@ -36,11 +42,17 @@ const CreateWhatsAppService = async ({
   isDefault = false,
   companyId,
   token = "",
-  provider = "beta"
+  provider = "beta",
+  facebookUserId,
+  facebookUserToken,
+  facebookPageUserId,
+  tokenMeta,
+  channel = "whatsapp",
+  expiresTicket
 }: Request): Promise<Response> => {
   const company = await Company.findOne({
     where: {
-      id: companyId
+      id: companyId,
     },
     include: [{ model: Plan, as: "plan" }]
   });
@@ -48,7 +60,8 @@ const CreateWhatsAppService = async ({
   if (company !== null) {
     const whatsappCount = await Whatsapp.count({
       where: {
-        companyId
+        companyId,
+        channel: channel
       }
     });
 
@@ -69,7 +82,7 @@ const CreateWhatsAppService = async ({
         async value => {
           if (!value) return false;
           const nameExists = await Whatsapp.findOne({
-            where: { name: value }
+            where: { name: value, channel: channel }
           });
           return !nameExists;
         }
@@ -83,15 +96,17 @@ const CreateWhatsAppService = async ({
     throw new AppError(err.message);
   }
 
-  const whatsappFound = await Whatsapp.findOne({ where: { companyId } });
+  const whatsappFound = await Whatsapp.findOne({ where: { companyId} });
 
-  isDefault = !whatsappFound;
+  isDefault = channel === "whatsapp" ? !whatsappFound : false
+
+
 
   let oldDefaultWhatsapp: Whatsapp | null = null;
 
-  if (isDefault) {
+  if(channel === 'whatsapp' && isDefault) {
     oldDefaultWhatsapp = await Whatsapp.findOne({
-      where: { isDefault: true, companyId }
+      where: { isDefault: true, companyId, channel: channel }
     });
     if (oldDefaultWhatsapp) {
       await oldDefaultWhatsapp.update({ isDefault: false, companyId });
@@ -113,7 +128,7 @@ const CreateWhatsAppService = async ({
           async value => {
             if (!value) return false;
             const tokenExists = await Whatsapp.findOne({
-              where: { token: value }
+              where: { token: value, channel: channel }
             });
             return !tokenExists;
           }
@@ -138,7 +153,13 @@ const CreateWhatsAppService = async ({
       isDefault,
       companyId,
       token,
-      provider
+      provider,
+      channel,
+      facebookUserId,
+      facebookUserToken,
+      facebookPageUserId,
+      tokenMeta,
+      expiresTicket
     },
     { include: ["queues"] }
   );

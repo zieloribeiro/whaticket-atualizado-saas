@@ -1,33 +1,30 @@
 import * as Sentry from "@sentry/node";
 import makeWASocket, {
-  AnyWASocket,
   AuthenticationState,
   DisconnectReason,
+  WASocket,
   fetchLatestBaileysVersion,
-  LegacyAuthenticationCreds,
-  makeInMemoryStore,
-  makeWALegacySocket
+  isJidBroadcast,
+  makeCacheableSignalKeyStore,
 } from "@adiwajshing/baileys";
 import P from "pino";
 
 import Whatsapp from "../models/Whatsapp";
 import { logger } from "../utils/logger";
 import MAIN_LOGGER from "@adiwajshing/baileys/lib/Utils/logger";
-import authStateLegacy from "../helpers/authStateLegacy";
-import authState from "../helpers/authState";
+import { useMultiFileAuthState } from "../helpers/useMultiFileAuthState";
 import { Boom } from "@hapi/boom";
 import AppError from "../errors/AppError";
 import { getIO } from "./socket";
-import { Store } from "./store";
 import { StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSession";
 import DeleteBaileysService from "../services/BaileysServices/DeleteBaileysService";
+import { cacheLayer } from "./cache";
 
 const loggerBaileys = MAIN_LOGGER.child({});
 loggerBaileys.level = "error";
 
-type Session = AnyWASocket & {
+type Session = WASocket & {
   id?: number;
-  store?: Store;
 };
 
 const sessions: Session[] = [];
@@ -77,51 +74,64 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         const { id, name, provider } = whatsappUpdate;
 
         const { version, isLatest } = await fetchLatestBaileysVersion();
-        const isLegacy = provider === "stable" ? true : false;
 
         logger.info(`using WA v${version.join(".")}, isLatest: ${isLatest}`);
-        logger.info(`isLegacy: ${isLegacy}`);
         logger.info(`Starting session ${name}`);
         let retriesQrCode = 0;
 
         let wsocket: Session = null;
-        const store = makeInMemoryStore({
-          logger: loggerBaileys
+
+        const { state, saveCreds } = await useMultiFileAuthState(whatsapp);
+
+        wsocket = makeWASocket({
+          logger: loggerBaileys,
+          printQRInTerminal: false,
+          auth: {
+            creds: state.creds,
+            keys: makeCacheableSignalKeyStore(state.keys, logger),
+          },
+          version,
+          shouldIgnoreJid: jid => isJidBroadcast(jid),
+          patchMessageBeforeSending: (message) => {
+            const requiresPatch = !!(
+              message.buttonsMessage
+              || message.templateMessage
+              || message.listMessage
+            );
+            if (requiresPatch) {
+              message = {
+                viewOnceMessageV2: {
+                  message: {
+                    messageContextInfo: {
+                      deviceListMetadataVersion: 2,
+                      deviceListMetadata: {},
+                    },
+                    ...message,
+                  },
+                },
+              };
+            }
+
+            return message;
+          }
+
         });
 
-        const { state, saveState } = isLegacy
-          ? await authStateLegacy(whatsapp)
-          : await authState(whatsapp);
 
-        wsocket = isLegacy
-          ? makeWALegacySocket({
-              logger: loggerBaileys,
-              printQRInTerminal: false,
-              auth: state as LegacyAuthenticationCreds,
-              version
-            })
-          : makeWASocket({
-              logger: loggerBaileys,
-              printQRInTerminal: false,
-              auth: state as AuthenticationState,
-              version
-            });
-
-        wsocket.store = store;
 
         wsocket.ev.on(
           "connection.update",
           async ({ connection, lastDisconnect, qr }) => {
             logger.info(
-              `Socket  ${name} Connection Update ${connection || ""} ${
-                lastDisconnect || ""
+              `Socket  ${name} Connection Update ${connection || ""} ${lastDisconnect || ""
               }`
             );
 
             if (connection === "close") {
-              if (lastDisconnect?.error?.output?.statusCode === 403) {
+              if ((lastDisconnect?.error as Boom)?.output?.statusCode === 403) {
                 await whatsapp.update({ status: "PENDING", session: "" });
                 await DeleteBaileysService(whatsapp.id);
+                await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
                 io.emit(`company-${whatsapp.companyId}-whatsappSession`, {
                   action: "update",
                   session: whatsapp
@@ -140,6 +150,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
               } else {
                 await whatsapp.update({ status: "PENDING", session: "" });
                 await DeleteBaileysService(whatsapp.id);
+                await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
                 io.emit(`company-${whatsapp.companyId}-whatsappSession`, {
                   action: "update",
                   session: whatsapp
@@ -182,7 +193,8 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                   qrcode: ""
                 });
                 await DeleteBaileysService(whatsappUpdate.id);
-                io.emit("whatsappSession", {
+                await cacheLayer.delFromPattern(`sessions:${whatsapp.id}:*`);
+                io.emit(`company-${whatsapp.companyId}-whatsappSession`, {
                   action: "update",
                   session: whatsappUpdate
                 });
@@ -216,9 +228,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             }
           }
         );
-        wsocket.ev.on("creds.update", saveState);
-
-        store.bind(wsocket.ev);
+        wsocket.ev.on("creds.update", saveCreds);
       })();
     } catch (error) {
       Sentry.captureException(error);

@@ -1,10 +1,10 @@
-import { WALegacySocket, WAMessage } from "@adiwajshing/baileys";
+import { WASocket, WAMessage } from "@adiwajshing/baileys";
 import * as Sentry from "@sentry/node";
 import AppError from "../../errors/AppError";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
-import { verifyMessage } from "../WbotServices/wbotMessageListener";
+
 import formatBody from "../../helpers/Mustache";
 
 interface Request {
@@ -24,37 +24,24 @@ const SendWhatsAppMessage = async ({
     ticket.isGroup ? "g.us" : "s.whatsapp.net"
   }`;
   if (quotedMsg) {
-    if (wbot.type === "legacy") {
-      const chatMessages = await (wbot as WALegacySocket).loadMessageFromWA(
-        number,
-        quotedMsg.id
-      );
+
+    const chatMessages = await Message.findOne({
+      where: {
+        id: quotedMsg.id
+      }
+    });
+
+    if (chatMessages) {
+      const msgFound = JSON.parse(chatMessages.dataJson);
 
       options = {
-        quoted: chatMessages
-      };
-    }
-
-    if (wbot.type === "md") {
-      const chatMessages = await Message.findOne({
-        where: {
-          id: quotedMsg.id
-        }
-      });
-
-      if (chatMessages) {
-        const msgFound = JSON.parse(chatMessages.dataJson);
-
-        options = {
-          quoted: {
-            key: msgFound.key,
-            message: {
-              extendedTextMessage: msgFound.message.extendedTextMessage
-            }
+        quoted: {
+          key: msgFound.key,
+          message: {
+            extendedTextMessage: msgFound.message.extendedTextMessage
           }
-        };
-      }
-      console.log(chatMessages)
+        }
+      };
     }
   }
 
@@ -66,9 +53,6 @@ const SendWhatsAppMessage = async ({
         ...options
       }
     );
-
-    await verifyMessage(sentMessage, ticket, ticket.contact);
-
     await ticket.update({ lastMessage: formatBody(body, ticket.contact) });
     return sentMessage;
   } catch (err) {

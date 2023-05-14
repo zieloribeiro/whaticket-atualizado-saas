@@ -5,7 +5,7 @@ import * as Sentry from "@sentry/node";
 import { isNil, isNull, head } from "lodash";
 
 import {
-  AnyWASocket,
+  WASocket,
   downloadContentFromMessage,
   extractMessageContent,
   getContentType,
@@ -13,16 +13,16 @@ import {
   MediaType,
   MessageUpsertType,
   proto,
-  WALegacySocket,
   WAMessage,
   BinaryNode,
   WAMessageStubType,
   WAMessageUpdate,
-  WASocket,
+  delay,
 } from "@adiwajshing/baileys";
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
+import bdTemp from "./Tmp"
 
 import { getIO } from "../../libs/socket";
 import CreateMessageService from "../MessageServices/CreateMessageService";
@@ -30,10 +30,8 @@ import { logger } from "../../utils/logger";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
 import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
-import { debounce } from "../../helpers/Debounce";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
 import formatBody from "../../helpers/Mustache";
-import { Store } from "../../libs/store";
 import TicketTraking from "../../models/TicketTraking";
 import UserRating from "../../models/UserRating";
 import SendWhatsAppMessage from "./SendWhatsAppMessage";
@@ -48,18 +46,14 @@ import { Op } from "sequelize";
 import { campaignQueue, parseToMilliseconds, randomValue } from "../../queues";
 import User from "../../models/User";
 import Setting from "../../models/Setting";
-import Baileys from "../../models/Baileys";
-import { getWbot } from "../../libs/wbot";
-import GetDefaultWhatsApp from "../../helpers/GetDefaultWhatsApp";
+import { cacheLayer } from "../../libs/cache";
+import { provider } from "./providers";
+import { debounce } from "../../helpers/Debounce";
 
-const puppeteer = require('puppeteer');
 const fs = require('fs')
-const path = require('path');
-var axios = require('axios');
 
-type Session = AnyWASocket & {
+type Session = WASocket & {
   id?: number;
-  store?: Store;
 };
 
 interface ImessageUpsert {
@@ -77,15 +71,73 @@ interface IMessage {
   isLatest: boolean;
 }
 
-const isNumeric = (value: string) => /^-?\d+$/.test(value);
+export const isNumeric = (value: string) => /^-?\d+$/.test(value);
 
 const writeFileAsync = promisify(writeFile);
 
 const getTypeMessage = (msg: proto.IWebMessageInfo): string => {
-  return getContentType(msg.message);
+  try {
+    // verificar se o type é um viewOnceMessage
+    let type = getContentType(msg.message)
+
+    if (type === "viewOnceMessage") {
+      // verificar se msg.message tem listMessage ou buttonMessage
+      if (msg?.message?.viewOnceMessage?.message?.listMessage) {
+        type = "listMessage"
+      }
+      if (msg?.message?.viewOnceMessage?.message?.buttonsMessage) {
+        type = "buttonsMessage"
+      }
+      if (msg?.message?.viewOnceMessage?.message) {
+        type = getContentType(msg?.message?.viewOnceMessage?.message)
+      }
+    }
+
+    if (type === "ephemeralMessage") {
+      // verificar se msg.message tem listMessage ou buttonMessage
+      if (msg?.message?.ephemeralMessage?.message?.listMessage) {
+        type = "listMessage"
+      }
+      if (msg?.message?.ephemeralMessage?.message?.buttonsMessage) {
+        type = "buttonsMessage"
+      }
+      if (msg?.message?.ephemeralMessage?.message?.imageMessage) {
+        type = "imageMessage"
+      }
+
+      if (msg?.message?.ephemeralMessage?.message?.audioMessage) {
+        type = "audioMessage"
+      }
+      if (msg?.message?.ephemeralMessage?.message?.audioMessage) {
+        type = "videoMessage"
+      }
+      if (msg?.message?.ephemeralMessage?.message?.documentMessage) {
+        type = "documentMessage"
+      }
+      if (msg?.message?.ephemeralMessage?.message?.stickerMessage) {
+        type = "stickerMessage"
+      }
+      if (msg?.message?.ephemeralMessage?.message?.contactMessage) {
+        type = "contactMessage"
+      }
+      if (msg?.message?.ephemeralMessage?.message?.locationMessage) {
+        type = "locationMessage"
+      }
+      if (msg?.message?.ephemeralMessage?.message?.protocolMessage) {
+        type = "protocolMessage"
+      }
+      if (msg?.message?.ephemeralMessage?.message?.viewOnceMessage) {
+        type = getContentType(msg?.message?.ephemeralMessage?.message?.viewOnceMessage?.message)
+      }
+    }
+    return type
+  } catch (error) {
+    Sentry.setExtra('Error getTypeMessage', { msg });
+    Sentry.captureException(error);
+  }
 };
 
-function validaCpfCnpj(val) {
+export function validaCpfCnpj(val) {
   if (val.length == 11) {
     var cpf = val.trim();
 
@@ -208,11 +260,10 @@ function timeout(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function sleep(time) {
+export async function sleep(time) {
   await timeout(time);
 }
-
-const sendMessageImage = async (
+export const sendMessageImage = async (
   wbot: Session,
   contact,
   ticket: Ticket,
@@ -239,10 +290,10 @@ const sendMessageImage = async (
       }
     );
   }
-  verifyMessage(sentMessage, ticket, contact);
+  verifyMessage(sentMessage, ticket, contact, ticket.companyId);
 };
 
-const sendMessageLink = async (
+export const sendMessageLink = async (
   wbot: Session,
   contact: Contact,
   ticket: Ticket,
@@ -267,10 +318,10 @@ const sendMessageLink = async (
     }
     );
   }
-  verifyMessage(sentMessage, ticket, contact);
+  verifyMessage(sentMessage, ticket, contact, ticket.companyId);
 };
 
-function makeid(length) {
+export function makeid(length) {
   var result = '';
   var characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   var charactersLength = characters.length;
@@ -281,27 +332,6 @@ function makeid(length) {
 }
 
 
-const getBodyButton = (msg: proto.IWebMessageInfo): string => {
-  if (msg.key.fromMe && msg?.message?.viewOnceMessage?.message?.buttonsMessage?.contentText) {
-    let bodyMessage = `*${msg?.message?.viewOnceMessage?.message?.buttonsMessage?.contentText}*`;
-
-    for (const buton of msg.message?.viewOnceMessage?.message?.buttonsMessage?.buttons) {
-      bodyMessage += `\n\n${buton.buttonText?.displayText}`;
-    }
-    return bodyMessage;
-  }
-
-  if (msg.key.fromMe && msg?.message?.viewOnceMessage?.message?.listMessage) {
-    let bodyMessage = `*${msg?.message?.viewOnceMessage?.message?.listMessage?.description}*`;
-    for (const buton of msg.message?.viewOnceMessage?.message?.listMessage?.sections) {
-      for (const rows of buton.rows) {
-        bodyMessage += `\n\n${rows.title}`;
-      }
-    }
-
-    return bodyMessage;
-  }
-};
 
 const msgLocation = (image, latitude, longitude) => {
   if (image) {
@@ -312,96 +342,133 @@ const msgLocation = (image, latitude, longitude) => {
   }
 };
 
-export const getBodyMessage = (msg: proto.IWebMessageInfo): string | null => {
+export const getBodyMessage = async (msg: proto.IWebMessageInfo): Promise<string> => {
+  function getBodyButton(msg: proto.IWebMessageInfo): string | null {
+    try {
 
+      if (msg?.message?.buttonsMessage?.contentText) {
+        let bodyMessage = `*${msg?.message?.buttonsMessage?.contentText}*`;
+        for (const buton of msg.message?.buttonsMessage?.buttons) {
+          bodyMessage += `\n\n${buton.buttonText.displayText}`;
+        }
+        return bodyMessage;
+      } else
+        if (msg?.message?.listMessage) {
+          let bodyMessage = `*${msg?.message?.listMessage?.description}*`;
+          for (const buton of msg.message?.listMessage?.sections[0]?.rows) {
+            bodyMessage += `\n\n${buton.title}`;
+          }
+          return bodyMessage;
+
+        }
+      if (msg.message?.viewOnceMessage?.message?.listMessage) {
+
+        let obj = msg.message?.viewOnceMessage?.message.listMessage;
+        let bodyMessage = `*${obj.description}*`;
+        for (const buton of obj.sections[0]?.rows) {
+          bodyMessage += `\n\n${buton.title}`;
+        }
+
+        return bodyMessage;
+      }
+      if (msg.message?.viewOnceMessage?.message?.buttonsMessage) {
+
+        let obj = msg.message?.viewOnceMessage?.message.buttonsMessage;
+        let bodyMessage = `*${obj.contentText}*`;
+        for (const buton of obj?.buttons) {
+          bodyMessage += `\n\n${buton.buttonText.displayText}`;
+        }
+        return bodyMessage;
+
+      }
+    } catch (error) {
+      logger.error(error);
+    }
+
+  }
   try {
-    let type = getTypeMessage(msg);
+    const type = getTypeMessage(msg);
+    if (!type) {
+      console.log("não achou o  type 90");
+      return;
+    }
+
 
     const types = {
-      conversation: msg.message.conversation,
-      imageMessage: msg.message.imageMessage?.caption,
-      videoMessage: msg.message.videoMessage?.caption,
-      extendedTextMessage: msg.message.extendedTextMessage?.text,
-      buttonsResponseMessage: msg.message.buttonsResponseMessage?.selectedButtonId,
-      templateButtonReplyMessage: msg.message?.templateButtonReplyMessage?.selectedId,
-      messageContextInfo: msg.message.buttonsResponseMessage?.selectedButtonId || msg.message.listResponseMessage?.title,
-      buttonsMessage: getBodyButton(msg) || msg.message.listResponseMessage?.singleSelectReply?.selectedRowId,
-      viewOnceMessage: getBodyButton(msg) || msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId,
-      stickerMessage: "sticker",
-      contactMessage: msg.message?.contactMessage?.vcard,
-      contactsArrayMessage: "varios contatos",
-      //locationMessage: `Latitude: ${msg.message.locationMessage?.degreesLatitude} - Longitude: ${msg.message.locationMessage?.degreesLongitude}`,
-      locationMessage: msgLocation(
-        msg.message?.locationMessage?.jpegThumbnail,
-        msg.message?.locationMessage?.degreesLatitude,
-        msg.message?.locationMessage?.degreesLongitude
-      ),
-      liveLocationMessage: `Latitude: ${msg.message.liveLocationMessage?.degreesLatitude} - Longitude: ${msg.message.liveLocationMessage?.degreesLongitude}`,
-      documentMessage: msg.message?.documentMessage?.title,
-      audioMessage: "Áudio",
-      listMessage: getBodyButton(msg) || msg.message.listResponseMessage?.title,
-      listResponseMessage: msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId,
-      reactionMessage: msg.message.reactionMessage?.text || "reaction",
-    };
+      "conversation": msg.message.conversation,
+      "imageMessage": msg.message.imageMessage?.caption || "image",
+      "videoMessage": msg.message.videoMessage?.caption || "video",
+      "extendedTextMessage": getBodyButton(msg) || msg.message.extendedTextMessage?.text || msg.message?.listMessage?.description,
+      "buttonsResponseMessage": msg.message.buttonsResponseMessage?.selectedDisplayText,
+      "listResponseMessage": msg?.message?.listResponseMessage?.title || "Chegou Aqui",
+      "templateButtonReplyMessage": msg.message?.templateButtonReplyMessage?.selectedId,
+      "messageContextInfo": msg.message.buttonsResponseMessage?.selectedButtonId ||
+        msg.message.listResponseMessage?.title,
+      "buttonsMessage": getBodyButton(msg) || msg.message.listResponseMessage?.title,
+      "stickerMessage": "sticker",
+      "contactMessage": msg.message.contactMessage?.vcard,
+      "contactsArrayMessage": "varios contatos",
+      "locationMessage": `Latitude: ${msg.message.locationMessage?.degreesLatitude} - Longitude: ${msg.message.locationMessage?.degreesLongitude}`,
+      "liveLocationMessage": `Latitude: ${msg.message.liveLocationMessage?.degreesLatitude} - Longitude: ${msg.message.liveLocationMessage?.degreesLongitude}`,
+      "documentMessage": msg.message.documentMessage?.title,
+      "audioMessage": "Áudio",
+      "reactionMessage": msg.message?.reactionMessage?.text,
+      "ephemeralMessage": msg.message?.ephemeralMessage?.message?.extendedTextMessage?.text,
+      "protocolMessage": msg.message?.protocolMessage?.type || msg.message?.ephemeralMessage?.message?.protocolMessage?.type,
+      "listMessage": getBodyButton(msg) || msg.message?.listMessage?.description,
+      "viewOnceMessage": getBodyButton(msg),
+      "documentWithCaptionMessage": msg.message?.documentWithCaptionMessage?.message?.documentMessage?.caption,
 
-    const objKey = Object.keys(types).find(key => key === type);
+    }
+
+    const objKey = Object.keys(types).find(objKey => objKey === type);
 
     if (!objKey) {
-      logger.warn(`#### Nao achou o type 152: ${type}
-${JSON.stringify(msg)}`);
-      Sentry.setExtra("Mensagem", { BodyMsg: msg.message, msg, type });
-      Sentry.captureException(
-        new Error("Novo Tipo de Mensagem em getTypeMessage")
-      );
+      logger.warn(`#### Nao achou o type em getBodyMessage: ${type}
+${JSON.stringify(msg?.message)}`);
+      Sentry.setExtra('Mensagem', { BodyMsg: msg.message, msg, type });
+      Sentry.captureException(new Error("Novo Tipo de Mensagem em getBodyMessage"));
     }
+
     return types[type];
+
   } catch (error) {
-    Sentry.setExtra("Error getTypeMessage", { msg, BodyMsg: msg.message });
+    Sentry.setExtra('Error getTypeMessage', { msg, BodyMsg: msg.message });
     Sentry.captureException(error);
     console.log(error);
   }
 };
 
-
 export const getQuotedMessage = (msg: proto.IWebMessageInfo): any => {
   const body =
     msg.message.imageMessage.contextInfo ||
     msg.message.videoMessage.contextInfo ||
-    msg.message?.documentMessage ||
     msg.message.extendedTextMessage.contextInfo ||
     msg.message.buttonsResponseMessage.contextInfo ||
     msg.message.listResponseMessage.contextInfo ||
     msg.message.templateButtonReplyMessage.contextInfo ||
     msg.message.buttonsResponseMessage?.contextInfo ||
-    msg?.message?.buttonsResponseMessage?.selectedButtonId ||
-    msg.message.listResponseMessage?.singleSelectReply?.selectedRowId ||
-    msg?.message?.listResponseMessage?.singleSelectReply.selectedRowId ||
     msg.message.listResponseMessage?.contextInfo;
-  msg.message.senderKeyDistributionMessage;
-
   // testar isso
 
   return extractMessageContent(body[Object.keys(body).values().next().value]);
 };
+
 export const getQuotedMessageId = (msg: proto.IWebMessageInfo) => {
   const body = extractMessageContent(msg.message)[
     Object.keys(msg?.message).values().next().value
   ];
+  let reaction = msg?.message?.reactionMessage ? msg?.message?.reactionMessage?.key?.id : "";
 
-  return body?.contextInfo?.stanzaId;
+  return reaction ? reaction : body?.contextInfo?.stanzaId;
 };
 
 const getMeSocket = (wbot: Session): IMe => {
 
-  return wbot.type === "legacy"
-    ? {
-      id: jidNormalizedUser((wbot as WALegacySocket).state.legacy.user.id),
-      name: (wbot as WALegacySocket).state.legacy.user.name
-    }
-    : {
-      id: jidNormalizedUser((wbot as WASocket).user.id),
-      name: (wbot as WASocket).user.name
-    };
+  return {
+    id: jidNormalizedUser((wbot as WASocket).user.id),
+    name: (wbot as WASocket).user.name
+  }
 };
 
 const getSenderMessage = (
@@ -417,9 +484,6 @@ const getSenderMessage = (
 };
 
 const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
-  if (wbot.type === "legacy") {
-    return wbot.store.contacts[msg.key.participant || msg.key.remoteJid] as IMe;
-  }
 
   const isGroup = msg.key.remoteJid.includes("g.us");
   const rawNumber = msg.key.remoteJid.replace(/\D/g, "");
@@ -436,35 +500,47 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
 
 const downloadMedia = async (msg: proto.IWebMessageInfo) => {
   const mineType =
-
     msg.message?.imageMessage ||
     msg.message?.audioMessage ||
     msg.message?.videoMessage ||
     msg.message?.stickerMessage ||
     msg.message?.documentMessage ||
-    msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
+    msg.message?.documentWithCaptionMessage?.message?.documentMessage ||
+    msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage ||
+    msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.videoMessage;
 
-  const messageType = msg.message?.documentMessage
-
-    ? "document"
-    : mineType.mimetype.split("/")[0].replace("application", "document")
-      ? (mineType.mimetype
-        .split("/")[0]
-        .replace("application", "document") as MediaType)
-      : (mineType.mimetype.split("/")[0] as MediaType);
+  let messageType = mineType.mimetype
+    .split("/")[0]
+    .replace("application", "document")
+    ? (mineType.mimetype
+      .split("/")[0]
+      .replace("application", "document") as MediaType)
+    : (mineType.mimetype.split("/")[0] as MediaType);
 
   let stream;
   let contDownload = 0;
 
+  if (msg.message.documentMessage || msg.message.documentWithCaptionMessage) {
+    messageType = "document";
+  }
+
   while (contDownload < 10 && !stream) {
     try {
+      contDownload > 1
+        ? logger.warn(`Tentativa ${contDownload} de baixar o arquivo`)
+        : "";
+
       stream = await downloadContentFromMessage(
         msg.message.audioMessage ||
         msg.message.videoMessage ||
         msg.message.documentMessage ||
+        msg.message.documentWithCaptionMessage?.message?.documentMessage ||
         msg.message.imageMessage ||
         msg.message.stickerMessage ||
-        msg.message.extendedTextMessage?.contextInfo.quotedMessage.imageMessage ||
+        msg.message.extendedTextMessage?.contextInfo.quotedMessage
+          .imageMessage ||
+          msg.message.extendedTextMessage?.contextInfo.quotedMessage
+          .videoMessage ||
         msg.message?.buttonsMessage?.imageMessage ||
         msg.message?.templateMessage?.fourRowTemplate?.imageMessage ||
         msg.message?.templateMessage?.hydratedTemplate?.imageMessage ||
@@ -477,12 +553,9 @@ const downloadMedia = async (msg: proto.IWebMessageInfo) => {
       await new Promise(resolve =>
         setTimeout(resolve, 1000 * contDownload * 2)
       );
-      logger.warn(
-        `>>>> erro ${contDownload} de baixar o arquivo ${msg?.key.id}`
-      );
+      logger.warn(`>>>> erro ${contDownload} de baixar o arquivo`);
     }
   }
-
 
   let buffer = Buffer.from([]);
   // eslint-disable-next-line no-restricted-syntax
@@ -504,6 +577,8 @@ const downloadMedia = async (msg: proto.IWebMessageInfo) => {
   if (!filename) {
     const ext = mineType.mimetype.split("/")[1].split(";")[0];
     filename = `${new Date().getTime()}.${ext}`;
+  } else {
+    filename = `${new Date().getTime()}_${filename}`;
   }
   const media = {
     data: buffer,
@@ -547,11 +622,10 @@ const verifyQuotedMessage = async (
 ): Promise<Message | null> => {
   if (!msg) return null;
   const quoted = getQuotedMessageId(msg);
-
   if (!quoted) return null;
 
   const quotedMsg = await Message.findOne({
-    where: { id: quoted },
+    where: { wid: quoted },
   });
 
   if (!quotedMsg) return null;
@@ -562,101 +636,92 @@ const verifyQuotedMessage = async (
 const verifyMediaMessage = async (
   msg: proto.IWebMessageInfo,
   ticket: Ticket,
-  contact: Contact
+  contact: Contact,
+  companyId: number
 ): Promise<Message> => {
-  const io = getIO();
   const quotedMsg = await verifyQuotedMessage(msg);
-  const media = await downloadMedia(msg);
-
-  if (!media) {
-    throw new Error("ERR_WAPP_DOWNLOAD_MEDIA");
-  }
-
-  if (!media.filename) {
-    const ext = media.mimetype.split("/")[1].split(";")[0];
-    media.filename = `${new Date().getTime()}.${ext}`;
-  }
-
   try {
-    await writeFileAsync(
-      join(__dirname, "..", "..", "..", "public", media.filename),
-      media.data,
-      "base64"
-    );
-  } catch (err) {
-    Sentry.captureException(err);
-    logger.error(err);
-  }
 
-  const body = getBodyMessage(msg);
+    const media = await downloadMedia(msg);
 
-  const messageData = {
-    id: msg.key.id,
-    ticketId: ticket.id,
-    contactId: msg.key.fromMe ? undefined : contact.id,
-    body: body ? body : media.filename,
-    fromMe: msg.key.fromMe,
-    read: msg.key.fromMe,
-    mediaUrl: media.filename,
-    mediaType: media.mimetype.split("/")[0],
-    quotedMsgId: quotedMsg?.id,
-    ack: msg.status,
-    remoteJid: msg.key.remoteJid,
-    participant: msg.key.participant,
-    dataJson: JSON.stringify(msg),
-  };
+    if (media.data === "error") {
+      throw new Error("ERR_WAPP_DOWNLOAD_MEDIA");
+    }
 
-  await ticket.update({
-    lastMessage: body || media.filename,
-  });
+    if (!media) {
+      throw new Error("ERR_WAPP_DOWNLOAD_MEDIA");
+    }
 
-  const newMessage = await CreateMessageService({
-    messageData,
-    companyId: ticket.companyId,
-  });
+    if (!media.filename) {
+      const ext = media.mimetype.split("/")[1].split(";")[0];
+      media.filename = `${new Date().getTime()}.${ext}`;
+    } else {
+      // ext = tudo depois do ultimo .
+      const ext = media.filename.split(".").pop();
+      // name = tudo antes do ultimo .
+      const name = media.filename.split(".").slice(0, -1).join(".").replace(/\s/g, '_').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-  if (!msg.key.fromMe && ticket.status === "closed") {
-    await ticket.update({ status: "pending" });
-    await ticket.reload({
-      include: [
-        { model: Queue, as: "queue" },
-        { model: User, as: "user" },
-        { model: Contact, as: "contact" },
-      ],
-    });
+      media.filename = `${name.trim()}_${new Date().getTime()}.${ext}`;
+    }
 
-    io.to("closed").emit(`company-${ticket.companyId}-ticket`, {
-      action: "delete",
-      ticket,
+    try {
+      await writeFileAsync(
+        join(__dirname, "..", "..", "..", "public", media.filename),
+        media.data,
+        "base64"
+      );
+    } catch (err) {
+      Sentry.setExtra('Erro midea', { companyId, ticket, contact, media, quotedMsg });
+      Sentry.captureException(err);
+      logger.error(err);
+    }
+
+    const body = await getBodyMessage(msg);
+    const messageData = {
+      wid: msg.key.id,
       ticketId: ticket.id,
+      contactId: msg.key.fromMe ? undefined : contact.id,
+      body: body ? body : media.filename,
+      fromMe: msg.key.fromMe,
+      read: msg.key.fromMe,
+      mediaUrl: media.filename,
+      mediaType: media.mimetype.split("/")[0],
+      quotedMsgId: quotedMsg?.id,
+      ack: msg.status,
+      remoteJid: msg.key.remoteJid,
+      participant: msg.key.participant,
+      dataJson: JSON.stringify(msg),
+      companyId,
+    };
+
+    await ticket.update({
+      lastMessage: body ? body : media.filename,
+    });
+    const newMessage = await CreateMessageService({
+      messageData,
+      companyId: ticket.companyId,
     });
 
-    io.to(ticket.status)
-      .to(ticket.id.toString())
-      .emit(`company-${ticket.companyId}-ticket`, {
-        action: "update",
-        ticket,
-        ticketId: ticket.id,
-      });
+    return newMessage;
+  } catch (error) {
+    logger.warn("Erro ao baixar media");
   }
-
-  return newMessage;
 };
 
 export const verifyMessage = async (
   msg: proto.IWebMessageInfo,
   ticket: Ticket,
-  contact: Contact
+  contact: Contact,
+  companyId: number
 ) => {
-  const io = getIO();
   const quotedMsg = await verifyQuotedMessage(msg);
-  const body = getBodyMessage(msg);
+  const body = await getBodyMessage(msg);
 
   const messageData = {
-    id: msg.key.id,
+    wid: msg.key.id,
     ticketId: ticket.id,
     contactId: msg.key.fromMe ? undefined : contact.id,
-    body,
+    body: body,
     fromMe: msg.key.fromMe,
     mediaType: getTypeMessage(msg),
     read: msg.key.fromMe,
@@ -664,48 +729,30 @@ export const verifyMessage = async (
     ack: msg.status,
     remoteJid: msg.key.remoteJid,
     participant: msg.key.participant,
-    dataJson: JSON.stringify(msg)
+    dataJson: JSON.stringify(msg),
   };
-
   await ticket.update({
-    lastMessage: body
+    lastMessage: body,
   });
-
-  await CreateMessageService({ messageData, companyId: ticket.companyId });
-
-  if (!msg.key.fromMe && ticket.status === "closed") {
-    await ticket.update({ status: "pending" });
-    await ticket.reload({
-      include: [
-        { model: Queue, as: "queue" },
-        { model: User, as: "user" },
-        { model: Contact, as: "contact" }
-      ]
+  try {
+    await CreateMessageService({
+      messageData,
+      companyId: ticket.companyId,
     });
-
-    io.to("closed").emit(`company-${ticket.companyId}-ticket`, {
-      action: "delete",
-      ticket,
-      ticketId: ticket.id
-    });
-
-    io.to(ticket.status)
-      .to(ticket.id.toString())
-      .emit(`company-${ticket.companyId}-ticket`, {
-        action: "update",
-        ticket,
-        ticketId: ticket.id
-      });
+  } catch (error) {
+    console.log(error)
   }
 };
 
+
 const isValidMsg = (msg: proto.IWebMessageInfo): boolean => {
-  if (msg.key.remoteJid === "status@broadcast") return false;
+ if (msg.key.remoteJid === "status@broadcast") return false;
   try {
     const msgType = getTypeMessage(msg);
     if (!msgType) {
       return;
     }
+
 
     const ifType =
       msgType === "conversation" ||
@@ -729,23 +776,24 @@ const isValidMsg = (msg: proto.IWebMessageInfo): boolean => {
       msgType === "protocolMessage" ||
       msgType === "listResponseMessage" ||
       msgType === "listMessage" ||
-      msgType === "viewOnceMessage";
+      msgType === "viewOnceMessage" ||
+      msgType === "documentWithCaptionMessage";
+
 
     if (!ifType) {
       logger.warn(`#### Nao achou o type em isValidMsg: ${msgType}
 ${JSON.stringify(msg?.message)}`);
-      Sentry.setExtra("Mensagem", { BodyMsg: msg.message, msg, msgType });
+      Sentry.setExtra('Mensagem', { BodyMsg: msg.message, msg, msgType });
       Sentry.captureException(new Error("Novo Tipo de Mensagem em isValidMsg"));
     }
 
     return !!ifType;
   } catch (error) {
-    Sentry.setExtra("Error isValidMsg", { msg });
+    Sentry.setExtra('Error isValidMsg', { msg });
     Sentry.captureException(error);
   }
+
 };
-
-
 const Push = (msg: proto.IWebMessageInfo) => {
   return msg.pushName;
 }
@@ -759,7 +807,10 @@ const verifyQueue = async (
   const { queues, greetingMessage } = await ShowWhatsAppService(
     wbot.id!,
     ticket.companyId
-  );
+  )
+
+
+
   if (queues.length === 1) {
     const firstQueue = head(queues);
     let chatbot = false;
@@ -775,7 +826,12 @@ const verifyQueue = async (
     return;
   }
 
-  const selectedOption = getBodyMessage(msg);
+  const selectedOption = msg?.message?.buttonsResponseMessage?.selectedButtonId ||
+    msg?.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+    msg?.message?.extendedTextMessage?.text ||
+    msg?.message?.conversation;
+
+
   const choosenQueue = queues[+selectedOption - 1];
 
   const companyId = ticket.companyId;
@@ -815,7 +871,7 @@ const verifyQueue = async (
       listMessage
     );
 
-    await verifyMessage(sendMsg, ticket, ticket.contact);
+    await verifyMessage(sendMsg, ticket, ticket.contact, ticket.companyId);
   }
 
   const botButton = async () => {
@@ -839,7 +895,7 @@ const verifyQueue = async (
       buttonMessage
     );
 
-    await verifyMessage(sendMsg, ticket, ticket.contact);
+    await verifyMessage(sendMsg, ticket, ticket.contact, ticket.companyId);
   }
 
   const botText = async () => {
@@ -859,7 +915,7 @@ const verifyQueue = async (
       textMessage
     );
 
-    await verifyMessage(sendMsg, ticket, ticket.contact);
+    await verifyMessage(sendMsg, ticket, ticket.contact, ticket.companyId);
   };
 
   if (choosenQueue) {
@@ -896,9 +952,9 @@ const verifyQueue = async (
             text: body,
           }
           );
-          await verifyMessage(sentMessage, ticket, contact);
+          await verifyMessage(sentMessage, ticket, contact, ticket.companyId);
           await UpdateTicketService({
-            ticketData: { queueId: null, queueOptionId: null, chatbot: false},
+            ticketData: { queueId: null, chatbot },
             ticketId: ticket.id,
             companyId: ticket.companyId,
           });
@@ -906,19 +962,17 @@ const verifyQueue = async (
         }
       }
 
-      const body = formatBody(`\u200e${choosenQueue.greetingMessage}`, ticket.contact
+      const body = formatBody(`${choosenQueue.greetingMessage}`, ticket.contact
       );
       const sentMessage = await wbot.sendMessage(
         `${contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`, {
-        text: body ,
+        text: body,
       }
       );
-
-      await verifyMessage(sentMessage, ticket, contact);
+      await verifyMessage(sentMessage, ticket, contact, ticket.companyId);
     }
 
   } else {
-
     if (buttonActive.value === "list") {
       return botList();
     };
@@ -940,7 +994,7 @@ const verifyQueue = async (
 };
 
 
-const verifyRating = (ticketTraking: TicketTraking) => {
+export const verifyRating = (ticketTraking: TicketTraking) => {
   if (
     ticketTraking &&
     ticketTraking.finishedAt === null &&
@@ -960,14 +1014,14 @@ const handleRating = async (
   const io = getIO();
   let rate: number | null = null;
 
-  if (msg.message?.extendedTextMessage?.text) {
-    rate = +msg.message?.extendedTextMessage?.text;
+  const bodyMessage = await getBodyMessage(msg);
+
+  if (bodyMessage) {
+    rate = +bodyMessage;
   }
 
   if (!Number.isNaN(rate) && Number.isInteger(rate) && !isNull(rate)) {
-
-
-    const { ratingMessage } = await ShowWhatsAppService(
+    const { complationMessage } = await ShowWhatsAppService(
       ticket.whatsappId,
       ticket.companyId
     );
@@ -985,30 +1039,27 @@ const handleRating = async (
       ticketId: ticketTraking.ticketId,
       companyId: ticketTraking.companyId,
       userId: ticketTraking.userId,
-      rate: finalRate,
+      rate: finalRate
     });
 
-
-
-    const body = formatBody(`\u200e${ratingMessage}`, ticket.contact);
+    const body = formatBody(`\u200e${complationMessage}`, ticket.contact);
     await SendWhatsAppMessage({ body, ticket });
-
 
     await ticketTraking.update({
       finishedAt: moment().toDate(),
-      rated: true,
+      rated: true
     });
 
     await ticket.update({
       queueId: null,
       userId: null,
-      status: "closed",
+      status: "closed"
     });
 
     io.to("open").emit(`company-${ticket.companyId}-ticket`, {
       action: "delete",
       ticket,
-      ticketId: ticket.id,
+      ticketId: ticket.id
     });
 
     io.to(ticket.status)
@@ -1016,14 +1067,14 @@ const handleRating = async (
       .emit(`company-${ticket.companyId}-ticket`, {
         action: "update",
         ticket,
-        ticketId: ticket.id,
+        ticketId: ticket.id
       });
-
   }
-
 };
 
 const handleChartbot = async (ticket: Ticket, msg: WAMessage, wbot: Session, dontReadTheFirstQuestion: boolean = false) => {
+
+
 
   const queue = await Queue.findByPk(ticket.queueId, {
     include: [
@@ -1038,46 +1089,14 @@ const handleChartbot = async (ticket: Ticket, msg: WAMessage, wbot: Session, don
       },
     ],
   });
-  /* if (ticket.queue !== null) {
-     const queue = await Queue.findByPk(ticket.queueId);
-     const { schedules }: any = queue;
-     const now = moment();
-     const weekday = now.format("dddd").toLowerCase();
-     let schedule;
- 
-     if (Array.isArray(schedules) && schedules.length > 0) {
-       schedule = schedules.find((s) => s.weekdayEn === weekday && s.startTime !== "" && s.startTime !== null && s.endTime !== "" && s.endTime !== null);
-     }
- 
-     if (ticket.queue.outOfHoursMessage !== null && ticket.queue.outOfHoursMessage !== "" && !isNil(schedule)) {
-   const now = moment();
-   const startTime = moment(schedule.startTime, "HH:mm");
-   const endTime = moment(schedule.endTime, "HH:mm");
- 
-   if (now.isBefore(startTime) || now.isAfter(endTime)) {
-     const body = formatBody(`${ticket.queue.outOfHoursMessage}\n\n*[ # ]* - Voltar ao Menu Principal`, ticket.contact);
-     const sentMessage = await wbot.sendMessage(
-       `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`, {
-         text: body,
-       }
-     );
-     await verifyMessage(sentMessage, ticket, ticket.contact);
-     return;
-   }
- 
-   const body = formatBody(`\u200e${ticket.queue.greetingMessage}`, ticket.contact);
-   const sentMessage = await wbot.sendMessage(
-     `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`, {
-       text: body,
-     }
-   );
-   await verifyMessage(sentMessage, ticket, ticket.contact);
- }
- 
-   } */
 
 
-  const messageBody = getBodyMessage(msg);
+
+
+  const messageBody = msg?.message?.buttonsResponseMessage?.selectedButtonId ||
+    msg?.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+    msg?.message?.extendedTextMessage?.text ||
+    msg?.message?.conversation;
 
   if (messageBody == "#") {
     // voltar para o menu inicial
@@ -1172,7 +1191,7 @@ const handleChartbot = async (ticket: Ticket, msg: WAMessage, wbot: Session, don
         listMessage
       );
 
-      await verifyMessage(sendMsg, ticket, ticket.contact);
+      await verifyMessage(sendMsg, ticket, ticket.contact, ticket.companyId);
     }
 
     const botButton = async () => {
@@ -1201,7 +1220,7 @@ const handleChartbot = async (ticket: Ticket, msg: WAMessage, wbot: Session, don
         buttonMessage
       );
 
-      await verifyMessage(sendMsg, ticket, ticket.contact);
+      await verifyMessage(sendMsg, ticket, ticket.contact, ticket.companyId);
     }
 
     const botText = async () => {
@@ -1221,7 +1240,7 @@ const handleChartbot = async (ticket: Ticket, msg: WAMessage, wbot: Session, don
         textMessage
       );
 
-      await verifyMessage(sendMsg, ticket, ticket.contact);
+      await verifyMessage(sendMsg, ticket, ticket.contact, ticket.companyId);
     };
 
     if (buttonActive.value === "list") {
@@ -1249,80 +1268,37 @@ const handleChartbot = async (ticket: Ticket, msg: WAMessage, wbot: Session, don
       ],
     });
 
-    if (!queueOptions.length) {
 
+    if (queueOptions.length == 0) {
+      const textMessage = {
+        text: formatBody(`${currentOption.message}`, ticket.contact),
+      };
 
+      const lastMessageFromMe = await Message.findOne({
+        where: {
+          ticketId: ticket.id,
+          fromMe: true,
+          body: textMessage.text
+        },
+        order: [["createdAt", "DESC"]]
+      });
 
+      if (lastMessageFromMe) {
+        return;
+      }
 
-//####################################
+      const sendMsg = await wbot.sendMessage(
+        `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`,
+        textMessage
+      );
 
+      await verifyMessage(sendMsg, ticket, ticket.contact, ticket.companyId);
 
-
-
-
-const queue = await Queue.findByPk(ticket.queueId);
-const { schedules }: any = queue;
-const now = moment();
-const weekday = now.format("dddd").toLowerCase();
-let schedule;
-if (Array.isArray(schedules) && schedules.length > 0) {
-  schedule = schedules.find((s) => s.weekdayEn === weekday && s.startTime !== "" && s.startTime !== null && s.endTime !== "" && s.endTime !== null);
-}
-
-if (queue.outOfHoursMessage !== null && queue.outOfHoursMessage !== "" && !isNil(schedule)) {
-  const startTime = moment(schedule.startTime, "HH:mm");
-  const endTime = moment(schedule.endTime, "HH:mm");
-
-  if (now.isBefore(startTime) || now.isAfter(endTime)) {//msg de fora
-
-    const body = formatBody(`${queue.outOfHoursMessage}\n\n*[ # ]* - Voltar ao Menu Principal`, ticket.contact);
-    const sentMessage = await wbot.sendMessage(
-      `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`, {
-      text: body,
+      return
     }
-    );
-    await verifyMessage(sentMessage, ticket, ticket.contact);
-    await UpdateTicketService({
-      ticketData: { queueId: null, queueOptionId: null, chatbot: false},
-      ticketId: ticket.id,
-      companyId: ticket.companyId,
-    });
-    return;
-  }
-}
 
+    if (queueOptions.length > 1) {
 
-
-
-
-const body = formatBody(
-  `\u200e${currentOption.message}`,
-  ticket.contact
-);
-
-const sentMessage = await wbot.sendMessage(
-  `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`,
-  {
-
-    text: body
-  }
-);
-
-await verifyMessage(sentMessage, ticket, ticket.contact);
-
-await UpdateTicketService({
-  ticketData: { queueId: null, queueOptionId: null, chatbot: false },
-  ticketId: ticket.id,
-  companyId: ticket.companyId,
-});
-
-
-//######################################
-
-
-
-    }
-    else {
       const companyId = ticket.companyId;
       const buttonActive = await Setting.findOne({
         where: {
@@ -1361,7 +1337,7 @@ await UpdateTicketService({
           listMessage
         );
 
-        await verifyMessage(sendMsg, ticket, ticket.contact);
+        await verifyMessage(sendMsg, ticket, ticket.contact, ticket.companyId);
       }
 
       const botButton = async () => {
@@ -1390,13 +1366,12 @@ await UpdateTicketService({
           buttonMessage
         );
 
-        await verifyMessage(sendMsg, ticket, ticket.contact);
+        await verifyMessage(sendMsg, ticket, ticket.contact, ticket.companyId);
       }
 
       const botText = async () => {
 
         let options = "";
-        options += ` *Escolha* *uma* *opção*:\n\n`;
 
         queueOptions.forEach((option, i) => {
           options += `*[ ${option.option} ]* - ${option.title}\n`;
@@ -1404,7 +1379,7 @@ await UpdateTicketService({
         options += `\n*[ # ]* - Voltar Menu Inicial`;
 
         const textMessage = {
-          text: formatBody(`\u200e${currentOption.message}${options}`, ticket.contact),
+          text: formatBody(`\u200e${currentOption.message}\n\n${options}`, ticket.contact),
         };
 
         const sendMsg = await wbot.sendMessage(
@@ -1412,7 +1387,7 @@ await UpdateTicketService({
           textMessage
         );
 
-        await verifyMessage(sendMsg, ticket, ticket.contact);
+        await verifyMessage(sendMsg, ticket, ticket.contact, ticket.companyId);
       };
 
       if (buttonActive.value === "list") {
@@ -1430,7 +1405,6 @@ await UpdateTicketService({
       if (buttonActive.value === "button" && QueueOption.length > 4) {
         return botText();
       }
-
     }
   }
 }
@@ -1454,23 +1428,42 @@ const handleMessage = async (
       },
     });
 
-    const bodyMessage = getBodyMessage(msg);
+    const bodyMessage = await getBodyMessage(msg);
     const msgType = getTypeMessage(msg);
+
+    if (msgType === "protocolMessage") return; // Tratar isso no futuro para excluir msgs se vor REVOKE
 
     const hasMedia =
       msg.message?.audioMessage ||
       msg.message?.imageMessage ||
       msg.message?.videoMessage ||
       msg.message?.documentMessage ||
-      msg.message.stickerMessage;
+      msg.message.stickerMessage ||
+      msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage ||
+      msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.videoMessage ||
+      msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.audioMessage ||
+      msg?.message?.ephemeralMessage?.message?.imageMessage ||
+      msg?.message?.ephemeralMessage?.message?.audioMessage ||
+      msg?.message?.ephemeralMessage?.message?.videoMessage ||
+      msg?.message?.ephemeralMessage?.message?.documentMessage ||
+      msg?.message?.ephemeralMessage?.message?.stickerMessage ||
+      msg.message?.viewOnceMessage?.message?.imageMessage ||
+      msg.message?.viewOnceMessage?.message?.videoMessage ||
+      msg.message?.ephemeralMessage?.message?.viewOnceMessage?.message?.imageMessage ||
+      msg.message?.ephemeralMessage?.message?.viewOnceMessage?.message?.videoMessage ||
+      msg.message?.documentWithCaptionMessage?.message?.documentMessage;
+
+
     if (msg.key.fromMe) {
       if (/\u200e/.test(bodyMessage)) return;
-
       if (
         !hasMedia &&
         msgType !== "conversation" &&
         msgType !== "extendedTextMessage" &&
-        msgType !== "vcard"
+        msgType !== "vcard" &&
+        msgType !== "reactionMessage" &&
+        msgType !== "ephemeralMessage" &&
+        msgType !== "protocolMessage"
       )
         return;
       msgContact = await getContactMessage(msg, wbot);
@@ -1481,35 +1474,93 @@ const handleMessage = async (
     if (msgIsGroupBlock?.value === "enabled" && isGroup) return;
 
     if (isGroup) {
-      const grupoMeta = await wbot.groupMetadata(msg.key.remoteJid, false);
-      const msgGroupContact = {
-        id: grupoMeta.id,
-        name: grupoMeta.subject
-      };
-      groupContact = await verifyContact(msgGroupContact, wbot, companyId);
+      try {
+
+        //Verificar se bdTemp[msg.key.remoteJid] tem createdAt e se ja tem mais de 10 minutos em relação ao momento atual
+        if (bdTemp[msg.key.remoteJid] && bdTemp[msg.key.remoteJid]?.grupo?.createdAt && bdTemp[msg.key.remoteJid].grupo) {
+          const createdAt = bdTemp[msg.key.remoteJid]?.grupo.createdAt;
+          const now = new Date();
+          const diff = now.getTime() - createdAt.getTime();
+          const minutes = Math.floor(diff / 60000);
+
+          if (minutes > 10) {
+            //sleep de meio segundo para evitar bloqueio
+            await new Promise(resolve => setTimeout(resolve, 500));
+            let temp = await wbot.groupMetadata(msg.key.remoteJid);
+            temp["createdAt"] = new Date();
+            bdTemp[msg.key.remoteJid].grupo = temp
+          }
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          let temp = await wbot.groupMetadata(msg.key.remoteJid);
+          temp["createdAt"] = new Date();
+          bdTemp[msg.key.remoteJid] = { grupo: temp, ...bdTemp[msg.key.remoteJid] };
+        }
+
+        const grupoMeta = bdTemp[msg.key.remoteJid].grupo;
+
+        const msgGroupContact = {
+          id: grupoMeta.id,
+          name: grupoMeta.subject,
+        };
+        groupContact = await verifyContact(msgGroupContact, wbot, companyId);
+        if (bodyMessage && bodyMessage.toUpperCase() === "##KEYGROUP") {
+
+          const sentMessage = await wbot.sendMessage(
+            `${msg.key.remoteJid}`,
+            {
+              text: `Grupo id: ${grupoMeta.id} \nNome: ${grupoMeta.subject} \nQtd Participantes: ${grupoMeta.participants.length}\n \nParticipantes:\n${grupoMeta.participants.map((participant: { id: any; admin: any; }) => `${participant.id} ${participant.admin ? participant.admin : ""}`).join("\n")}`,
+            }
+          );
+        }
+        if (bodyMessage && bodyMessage.toUpperCase() === "##REAJA") {
+          const emoticons = ['🤘🏽', '💖', '👏🏻', '🙏🏻', '🤓']
+          const reactionMessage = {
+            react: {
+              text: emoticons[Math.floor(Math.random() * emoticons.length)] || '😬',
+              key: msg.key
+            }
+          }
+          const sentMessage = await wbot.sendMessage(
+            `${msg.key.remoteJid}`, reactionMessage)
+        }
+      } catch (err) {
+        console.log(err);
+        Sentry.setExtra('Error isGroup', { companyId, msg, });
+        Sentry.captureException(err);
+        logger.error(`Error isGroup: Err: ${err}`);
+        throw new Error("ERR_ISGROUP_LISTNER");
+      }
     }
 
     const whatsapp = await ShowWhatsAppService(wbot.id!, companyId);
-    const count = wbot.store.chats.get(msg.key.remoteJid || msg.key.participant);
-    const unreadMessages = msg.key.fromMe ? 1 : 0;
-    /* count?.unreadCount || */
     const contact = await verifyContact(msgContact, wbot, companyId);
 
-    if (unreadMessages === 0 && whatsapp.farewellMessage && formatBody(whatsapp.farewellMessage, contact) === bodyMessage) {
+    let unreadMessages = 0;
+
+
+    if (msg.key.fromMe) {
+      await cacheLayer.set(`contacts:${contact.id}:unreads`, "0");
+    } else {
+      const unreads = await cacheLayer.get(`contacts:${contact.id}:unreads`);
+      unreadMessages = +unreads + 1;
+      await cacheLayer.set(
+        `contacts:${contact.id}:unreads`,
+        `${unreadMessages}`
+      );
+    }
+
+
+    if (unreadMessages === 0 && formatBody(whatsapp.complationMessage, contact) === formatBody(bodyMessage, contact)) {
       return;
     }
-    /////solucação do erro, erro a baixo
-    /*const ticket = await FindOrCreateTicketService(contact, whatsapp.id, unreadMessages, companyId, groupContact,);*/
-    const ticket = await FindOrCreateTicketService(contact, wbot.id!, unreadMessages, companyId, groupContact,);
 
+    const ticket = await FindOrCreateTicketService(contact, wbot.id!, unreadMessages, companyId, groupContact);
 
-    /////INTEGRAÇÕES
-    const filaescolhida = ticket.queue?.name
-
-
-
+    await provider(ticket, msg, companyId, contact, wbot as WASocket);
 
     // voltar para o menu inicial
+
     if (bodyMessage == "#") {
       await ticket.update({
         queueOptionId: null,
@@ -1520,25 +1571,20 @@ const handleMessage = async (
       return;
     }
 
+
     const ticketTraking = await FindOrCreateATicketTrakingService({
       ticketId: ticket.id,
       companyId,
-      whatsappId: whatsapp?.id,
+      whatsappId: whatsapp?.id
     });
 
 
-    if (hasMedia) {
-      await verifyMediaMessage(msg, ticket, contact);
-    } else {
-      await verifyMessage(msg, ticket, contact);
-    }
-
     try {
       if (!msg.key.fromMe) {
-        /*** Tratamento para avaliação do atendente */
-        let LetverifyRating = verifyRating(ticketTraking);
-        if (ticketTraking !== null && LetverifyRating) {
-
+        /**
+         * Tratamento para avaliação do atendente
+         */
+        if (verifyRating(ticketTraking)) {
           handleRating(msg, ticket, ticketTraking);
           return;
         }
@@ -1548,12 +1594,232 @@ const handleMessage = async (
       console.log(e);
     }
 
-    if (!ticket.queue && !isGroup && !msg.key.fromMe && !ticket.userId && whatsapp.queues.length >= 1) {
-      await verifyQueue(wbot, msg, ticket, ticket.contact);
+
+    if (hasMedia) {
+      await verifyMediaMessage(msg, ticket, contact, ticket.companyId);
+    } else {
+      await verifyMessage(msg, ticket, contact, ticket.companyId);
     }
+
+    const currentSchedule = await VerifyCurrentSchedule(companyId);
+    const scheduleType = await Setting.findOne({
+      where: {
+        companyId,
+        key: "scheduleType"
+      }
+    });
+
+
+    try {
+      if (!msg.key.fromMe && scheduleType) {
+        /**
+         * Tratamento para envio de mensagem quando a empresa está fora do expediente
+         */
+        if (
+          scheduleType.value === "company" &&
+          !isNil(currentSchedule) &&
+          (!currentSchedule || currentSchedule.inActivity === false)
+        ) {
+          const body = `${whatsapp.outOfHoursMessage}`;
+
+          const debouncedSentMessage = debounce(
+            async () => {
+              await wbot.sendMessage(
+                `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
+                }`,
+                {
+                  text: body
+                }
+              );
+            },
+            3000,
+            ticket.id
+          );
+          debouncedSentMessage();
+          return;
+        }
+
+
+        if (scheduleType.value === "queue" && ticket.queueId !== null) {
+
+          /**
+           * Tratamento para envio de mensagem quando a fila está fora do expediente
+           */
+          const queue = await Queue.findByPk(ticket.queueId);
+
+          const { schedules }: any = queue;
+          const now = moment();
+          const weekday = now.format("dddd").toLowerCase();
+          let schedule = null;
+
+          if (Array.isArray(schedules) && schedules.length > 0) {
+            schedule = schedules.find(
+              s =>
+                s.weekdayEn === weekday &&
+                s.startTime !== "" &&
+                s.startTime !== null &&
+                s.endTime !== "" &&
+                s.endTime !== null
+            );
+          }
+
+          if (
+            scheduleType.value === "queue" &&
+            queue.outOfHoursMessage !== null &&
+            queue.outOfHoursMessage !== "" &&
+            !isNil(schedule)
+          ) {
+            const startTime = moment(schedule.startTime, "HH:mm");
+            const endTime = moment(schedule.endTime, "HH:mm");
+
+            if (now.isBefore(startTime) || now.isAfter(endTime)) {
+              const body = `${queue.outOfHoursMessage}`;
+              const debouncedSentMessage = debounce(
+                async () => {
+                  await wbot.sendMessage(
+                    `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
+                    }`,
+                    {
+                      text: body
+                    }
+                  );
+                },
+                3000,
+                ticket.id
+              );
+              debouncedSentMessage();
+              return;
+            }
+          }
+        }
+
+      }
+    } catch (e) {
+      Sentry.captureException(e);
+      console.log(e);
+    }
+
+    try {
+      if (!msg.key.fromMe) {
+        if (ticketTraking !== null && verifyRating(ticketTraking)) {
+          handleRating(msg, ticket, ticketTraking);
+          return;
+        }
+      }
+    } catch (e) {
+      Sentry.captureException(e);
+      console.log(e);
+    }
+
+    if (
+      !ticket.queue &&
+      !isGroup &&
+      !msg.key.fromMe &&
+      !ticket.userId &&
+      whatsapp.queues.length >= 1
+    ) {
+      await verifyQueue(wbot, msg, ticket, ticket.contact);
+
+    }
+
     const dontReadTheFirstQuestion = ticket.queue === null;
 
     await ticket.reload();
+
+    try {
+      //Fluxo fora do expediente
+      if (!msg.key.fromMe && scheduleType && ticket.queueId !== null) {
+        /**
+         * Tratamento para envio de mensagem quando a fila está fora do expediente
+         */
+        const queue = await Queue.findByPk(ticket.queueId);
+
+        const { schedules }: any = queue;
+        const now = moment();
+        const weekday = now.format("dddd").toLowerCase();
+        let schedule = null;
+
+        if (Array.isArray(schedules) && schedules.length > 0) {
+          schedule = schedules.find(
+            s =>
+              s.weekdayEn === weekday &&
+              s.startTime !== "" &&
+              s.startTime !== null &&
+              s.endTime !== "" &&
+              s.endTime !== null
+          );
+        }
+
+        if (
+          scheduleType.value === "queue" &&
+          queue.outOfHoursMessage !== null &&
+          queue.outOfHoursMessage !== "" &&
+          !isNil(schedule)
+        ) {
+          const startTime = moment(schedule.startTime, "HH:mm");
+          const endTime = moment(schedule.endTime, "HH:mm");
+
+          if (now.isBefore(startTime) || now.isAfter(endTime)) {
+            const body = queue.outOfHoursMessage;
+            const debouncedSentMessage = debounce(
+              async () => {
+                await wbot.sendMessage(
+                  `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
+                  }`,
+                  {
+                    text: body
+                  }
+                );
+              },
+              3000,
+              ticket.id
+            );
+            debouncedSentMessage();
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      Sentry.captureException(e);
+      console.log(e);
+    }
+
+
+    if (whatsapp?.queues?.length === 0 && !ticket.userId && !isGroup && !msg.key.fromMe && !ticket.queue) {
+
+      const lastMessage = await Message.findOne({
+        where: {
+          ticketId: ticket.id,
+          fromMe: true
+        },
+        order: [["createdAt", "DESC"]]
+      });
+
+      if (lastMessage && lastMessage.body.includes(whatsapp.greetingMessage)) {
+        return;
+      }
+
+      if (whatsapp.greetingMessage && !msg.key.fromMe && !ticket.userId) {
+
+        const debouncedSentMessage = debounce(
+          async () => {
+            await wbot.sendMessage(
+              `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
+              }`,
+              {
+                text: whatsapp.greetingMessage
+              }
+            );
+          },
+          1000,
+          ticket.id
+        );
+        debouncedSentMessage();
+        return;
+      }
+
+    }
+
 
     if (whatsapp.queues.length == 1 && ticket.queue) {
       if (ticket.chatbot && !msg.key.fromMe) {
@@ -1565,7 +1831,9 @@ const handleMessage = async (
         await handleChartbot(ticket, msg, wbot, dontReadTheFirstQuestion);
       }
     }
+
   } catch (err) {
+    console.log(err)
     Sentry.captureException(err);
     logger.error(`Error handling whatsapp message: Err: ${err}`);
   }
@@ -1579,7 +1847,10 @@ const handleMsgAck = async (
   const io = getIO();
 
   try {
-    const messageToUpdate = await Message.findByPk(msg.key.id, {
+    const messageToUpdate = await Message.findOne({
+      where: {
+        wid: msg.key.id,
+      },
       include: [
         "contact",
         {
@@ -1645,12 +1916,14 @@ const verifyCampaignMessageAndCloseTicket = async (
   companyId: number
 ) => {
   const io = getIO();
-  const body = getBodyMessage(message);
+  const body = await getBodyMessage(message);
   const isCampaign = /\u200c/.test(body);
   if (message.key.fromMe && isCampaign) {
     const messageRecord = await Message.findOne({
-      where: { id: message.key.id!, companyId },
+      where: { wid: message.key.id!, companyId },
     });
+
+    if(!messageRecord) return
     const ticket = await Ticket.findByPk(messageRecord.ticketId);
     await ticket.update({ status: "closed" });
 
@@ -1696,14 +1969,29 @@ const wbotMessageListener = async (wbot: Session, companyId: number): Promise<vo
       if (!messages) return;
 
       messages.forEach(async (message: proto.IWebMessageInfo) => {
-        const messageExists = await Message.count({
-          where: { id: message.key.id!, companyId }
-        });
 
+        if (
+          !message.key.fromMe &&
+          messageUpsert.type === "notify"
+        ) {
+          (wbot as WASocket)!.readMessages([message.key]);
+        }
+
+        const messageExists = await Message.count({
+          where: { wid: message.key.id!, companyId }
+        });
+        
         if (!messageExists) {
-          await handleMessage(message, wbot, companyId);
-          await verifyRecentCampaign(message, companyId);
+
+          const body = await getBodyMessage(message);
+          const isCampaign = /\u200c/.test(body);
+
+          if(!isCampaign) {
+            await handleMessage(message, wbot, companyId);
+          }
+
           await verifyCampaignMessageAndCloseTicket(message, companyId);
+          await verifyRecentCampaign(message, companyId);
         }
       });
     });
@@ -1711,15 +1999,23 @@ const wbotMessageListener = async (wbot: Session, companyId: number): Promise<vo
     wbot.ev.on("messages.update", (messageUpdate: WAMessageUpdate[]) => {
       if (messageUpdate.length === 0) return;
       messageUpdate.forEach(async (message: WAMessageUpdate) => {
-        (wbot as WASocket)!.readMessages([message.key])
+
 
         handleMsgAck(message, message.update.status);
       });
     });
 
-    wbot.ev.on("messages.set", async (messageSet: IMessage) => {
-      messageSet.messages.filter(filterMessages).map(msg => msg);
-    });
+
+    wbot.ev.on('message-receipt.update', (events: any) => {
+      events.forEach(async (msg: any) => {
+        const ack = msg?.receipt?.receiptTimestamp ? 3 :
+          msg?.receipt?.readTimestamp ? 4 : 0;
+        if (!ack) return;
+        await handleMsgAck(msg, ack);
+      });
+    })
+
+
   } catch (error) {
     Sentry.captureException(error);
     logger.error(`Error handling wbot message listener. Err: ${error}`);

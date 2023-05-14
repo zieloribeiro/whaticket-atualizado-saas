@@ -46,9 +46,9 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 const initialSettings = {
-  messageInterval: 120,
-  longerIntervalAfter: 60,
-  greaterInterval: 180,
+  messageInterval: 20,
+  longerIntervalAfter: 20,
+  greaterInterval: 60,
   variables: [],
 };
 
@@ -156,7 +156,7 @@ const CampaignsConfig = () => {
                   <MenuItem value={5}>5 segundos</MenuItem>
                   <MenuItem value={10}>10 segundos</MenuItem>
                   <MenuItem value={15}>15 segundos</MenuItem>
-                  <MenuItem value={120}>120 segundos</MenuItem>
+                  <MenuItem value={20}>20 segundos</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -181,7 +181,7 @@ const CampaignsConfig = () => {
                   <MenuItem value={5}>5 mensagens</MenuItem>
                   <MenuItem value={10}>10 mensagens</MenuItem>
                   <MenuItem value={15}>15 mensagens</MenuItem>
-                  <MenuItem value={60}>60 mensagens</MenuItem>
+                  <MenuItem value={20}>20 mensagens</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -207,7 +207,7 @@ const CampaignsConfig = () => {
                   <MenuItem value={30}>30 segundos</MenuItem>
                   <MenuItem value={40}>40 segundos</MenuItem>
                   <MenuItem value={50}>50 segundos</MenuItem>
-                  <MenuItem value={180}>180 segundos</MenuItem>
+                  <MenuItem value={60}>60 segundos</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

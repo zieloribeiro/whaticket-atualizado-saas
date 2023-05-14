@@ -20,7 +20,6 @@ import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import ColorPicker from "../ColorPicker";
 import {
-  Grid,
   IconButton,
   InputAdornment,
   Paper,

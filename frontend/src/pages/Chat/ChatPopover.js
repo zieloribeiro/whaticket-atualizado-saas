@@ -142,7 +142,6 @@ export default function ChatPopover() {
       if (data.action === "new-message") {
         dispatch({ type: "CHANGE_CHAT", payload: data });
         if (data.newMessage.senderId !== user.id) {
-          console.log(data);
           soundAlertRef.current();
         }
       }

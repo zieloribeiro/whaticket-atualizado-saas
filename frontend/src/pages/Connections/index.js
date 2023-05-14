@@ -103,10 +103,14 @@ const CustomToolTip = ({ title, content, children }) => {
 
 const IconChannel = (channel) => {
   switch (channel) {
+    case "facebook":
+      return <Facebook />;
+    case "instagram":
+      return <Instagram />;
     case "whatsapp":
       return <WhatsApp />;
     default:
-      return "ID";
+      return "error";
   }
 };
 
@@ -393,10 +397,10 @@ const Connections = () => {
                     WhatsApp
                   </MenuItem>
                   <FacebookLogin
-                    appId="1889705611378689"
+                    appId={process.env.REACT_APP_FACEBOOK_APP_ID}
                     autoLoad={false}
                     fields="name,email,picture"
-                    version="9.0"
+                    version="13.0"
                     scope="public_profile,pages_messaging,pages_show_list,pages_manage_metadata,pages_read_engagement"
                     callback={responseFacebook}
                     render={(renderProps) => (
@@ -413,10 +417,10 @@ const Connections = () => {
                   />
 
                   <FacebookLogin
-                    appId="1889705611378689"
+                    appId={process.env.REACT_APP_FACEBOOK_APP_ID}
                     autoLoad={false}
                     fields="name,email,picture"
-                    version="9.0"
+                    version="13.0"
                     scope="public_profile,instagram_basic,instagram_manage_messages,pages_messaging,pages_show_list,pages_manage_metadata,pages_read_engagement"
                     callback={responseInstagram}
                     render={(renderProps) => (

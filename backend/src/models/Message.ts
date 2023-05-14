@@ -8,7 +8,8 @@ import {
   PrimaryKey,
   Default,
   BelongsTo,
-  ForeignKey
+  ForeignKey,
+  AutoIncrement
 } from "sequelize-typescript";
 import Contact from "./Contact";
 import Ticket from "./Ticket";
@@ -18,8 +19,12 @@ import Queue from "./Queue";
 @Table
 class Message extends Model<Message> {
   @PrimaryKey
+  @AutoIncrement
   @Column
-  id: string;
+  id: number;
+  
+  @Column
+  wid: string;
 
   @Column(DataType.STRING)
   remoteJid: string;
@@ -42,15 +47,18 @@ class Message extends Model<Message> {
   @Column
   fromMe: boolean;
 
+  @Column({ defaultValue: "whatsapp" })
+  channel: string;
+
   @Column(DataType.TEXT)
   body: string;
 
   @Column(DataType.STRING)
   get mediaUrl(): string | null {
     if (this.getDataValue("mediaUrl")) {
-      return `${process.env.BACKEND_URL}/public/${this.getDataValue(
-        "mediaUrl"
-      )}`;
+      return `${process.env.BACKEND_URL}:${
+        process.env.PROXY_PORT
+      }/public/${this.getDataValue("mediaUrl")}`;
     }
     return null;
   }
@@ -72,7 +80,7 @@ class Message extends Model<Message> {
 
   @ForeignKey(() => Message)
   @Column
-  quotedMsgId: string;
+  quotedMsgId: number;
 
   @BelongsTo(() => Message, "quotedMsgId")
   quotedMsg: Message;

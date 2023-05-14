@@ -116,6 +116,8 @@ export const showFromUUID = async (
 ): Promise<Response> => {
   const { uuid } = req.params;
 
+
+
   const ticket: Ticket = await ShowTicketUUIDService(uuid);
 
   return res.status(200).json(ticket);
@@ -158,5 +160,5 @@ export const remove = async (
       ticketId: +ticketId
     });
 
-  return res.status(200).json({ message: "Atendimento Resetado" });
+  return res.status(200).json({ message: "ticket deleted" });
 };

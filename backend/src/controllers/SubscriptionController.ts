@@ -74,31 +74,6 @@ export const createSubscription = async (
       throw new AppError("Company not found", 404);
     }
 
-
-/*     await Subscriptions.create({
-      companyId,
-      isActive: false,
-      userPriceCents: users,
-      whatsPriceCents: connections,
-      lastInvoiceUrl: pix.location,
-      lastPlanChange: new Date(),
-      providerSubscriptionId: pix.loc.id,
-      expiresAt: new Date()
-    }); */
-
-/*     const { id } = req.user;
-    const userData = {};
-    const userId = id;
-    const requestUserId = parseInt(id);
-    const user = await UpdateUserService({ userData, userId, companyId, requestUserId }); */
-
-    /*     const io = getIO();
-        io.emit("user", {
-          action: "update",
-          user
-        }); */
-
-
     return res.json({
       ...pix,
       qrcode,
@@ -106,7 +81,7 @@ export const createSubscription = async (
     });
   } catch (error) {
     console.log(error);
-    throw new AppError("Validation fails", 400);
+    throw new AppError("Problema encontrado, entre em contato com o suporte!", 400);
   }
 };
 
@@ -148,9 +123,13 @@ export const webhook = async (
   ): Promise<Response> => {
   const { type } = req.params;
   const { evento } = req.body;
+
+  console.log(req.body)
+
   if (evento === "teste_webhook") {
     return res.json({ ok: true });
   }
+  
   if (req.body.pix) {
     const gerencianet = Gerencianet(options);
     req.body.pix.forEach(async (pix: any) => {

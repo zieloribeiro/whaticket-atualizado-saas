@@ -43,7 +43,7 @@ const ListService = async ({
   const limit = 20;
   const offset = limit * (+pageNumber - 1);
 
-  const { count, rows: records } = await Campaign.findAndCountAll({
+  const records = await Campaign.findAll({
     where: whereCondition,
     limit,
     offset,
@@ -53,6 +53,8 @@ const ListService = async ({
       { model: Whatsapp, attributes: ["id", "name"] }
     ]
   });
+
+  const count = await Campaign.count({ where: whereCondition });
 
   const hasMore = count > offset + records.length;
 

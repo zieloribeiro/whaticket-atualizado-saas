@@ -42,7 +42,7 @@ const CreateTicketService = async ({
   });
 
   await Ticket.update(
-    { companyId, queueId, userId, status: "open" },
+    { companyId, queueId, userId, whatsappId: defaultWhatsapp.id, status: "open" },
     { where: { id } }
   );
 
@@ -54,7 +54,7 @@ const CreateTicketService = async ({
 
   const io = getIO();
 
-  io.to(ticket.id.toString()).emit("ticket", {
+  io.to(ticket.id.toString()).emit(`company-${ticket.companyId}-ticket`, {
     action: "update",
     ticket
   });

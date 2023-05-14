@@ -26,7 +26,6 @@ export const SendMessage = async (
         messageData.mediaPath
       );
       if (options) {
-        const body = fs.readFileSync(messageData.mediaPath);
         message = await wbot.sendMessage(chatId, {
           ...options
         });

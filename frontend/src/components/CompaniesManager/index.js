@@ -30,6 +30,7 @@ import { head, isArray, has } from "lodash";
 import { useDate } from "../../hooks/useDate";
 
 import moment from "moment";
+
 const useStyles = makeStyles((theme) => ({
   root: {
     width: "100%",
@@ -140,25 +141,10 @@ export function CompanyForm(props) {
     setModalUser(false);
   };
 
-  const incrementDueDateMon = () => {
-    const data = { ...record };
-    data.recurrence = "MENSAL";
-    if (data.dueDate !== "" && data.dueDate !== null) {
-      data.dueDate = moment(data.dueDate)
-        .add(1, "month")
-        .format("YYYY-MM-DD");
-    }
-    setRecord(data);
-  }
   const incrementDueDate = () => {
     const data = { ...record };
     if (data.dueDate !== "" && data.dueDate !== null) {
       switch (data.recurrence) {
-        case "TESTE":
-          data.dueDate = moment(data.dueDate)
-            .add(1, "day")
-            .format("YYYY-MM-DD");
-          break;
         case "MENSAL":
           data.dueDate = moment(data.dueDate)
             .add(1, "month")
@@ -326,24 +312,28 @@ export function CompanyForm(props) {
                     margin="dense"
                   >
                     <MenuItem value="MENSAL">Mensal</MenuItem>
+                    <MenuItem value="BIMESTRAL">Bimestral</MenuItem>
+                    <MenuItem value="TRIMESTRAL">Trimestral</MenuItem>
+                    <MenuItem value="SEMESTRAL">Semestral</MenuItem>
+                    <MenuItem value="ANUAL">Anual</MenuItem>
                   </Field>
                 </FormControl>
               </Grid>
               <Grid xs={12} item>
                 <Grid justifyContent="flex-end" spacing={1} container>
+                  <Grid xs={4} md={1} item>
+                    <ButtonWithSpinner
+                      className={classes.fullWidth}
+                      style={{ marginTop: 7 }}
+                      loading={loading}
+                      onClick={() => onCancel()}
+                      variant="contained"
+                    >
+                      Limpar
+                    </ButtonWithSpinner>
+                  </Grid>
                   {record.id !== undefined ? (
                     <>
-                      <Grid xs={4} md={1} item>
-                        <ButtonWithSpinner
-                          className={classes.fullWidth}
-                          style={{ marginTop: 7 }}
-                          loading={loading}
-                          onClick={() => onCancel()}
-                          variant="contained"
-                        >
-                          Limpar
-                        </ButtonWithSpinner>
-                      </Grid>
                       <Grid xs={6} md={1} item>
                         <ButtonWithSpinner
                           style={{ marginTop: 7 }}
@@ -356,7 +346,7 @@ export function CompanyForm(props) {
                           Excluir
                         </ButtonWithSpinner>
                       </Grid>
-                      {/*                       <Grid xs={6} md={2} item>
+                      <Grid xs={6} md={2} item>
                         <ButtonWithSpinner
                           style={{ marginTop: 7 }}
                           className={classes.fullWidth}
@@ -367,7 +357,7 @@ export function CompanyForm(props) {
                         >
                           + Vencimento
                         </ButtonWithSpinner>
-                      </Grid> */}
+                      </Grid>
                       <Grid xs={6} md={1} item>
                         <ButtonWithSpinner
                           style={{ marginTop: 7 }}
@@ -380,20 +370,20 @@ export function CompanyForm(props) {
                           Usuário
                         </ButtonWithSpinner>
                       </Grid>
-                      <Grid xs={6} md={1} item>
-                        <ButtonWithSpinner
-                          className={classes.fullWidth}
-                          style={{ marginTop: 7 }}
-                          loading={loading}
-                          type="submit"
-                          variant="contained"
-                          color="primary"
-                        >
-                          Salvar
-                        </ButtonWithSpinner>
-                      </Grid>
                     </>
                   ) : null}
+                  <Grid xs={6} md={1} item>
+                    <ButtonWithSpinner
+                      className={classes.fullWidth}
+                      style={{ marginTop: 7 }}
+                      loading={loading}
+                      type="submit"
+                      variant="contained"
+                      color="primary"
+                    >
+                      Salvar
+                    </ButtonWithSpinner>
+                  </Grid>
                 </Grid>
               </Grid>
             </Grid>
@@ -448,7 +438,6 @@ export function CompaniesManagerGrid(props) {
     }
     return {};
   };
-
 
   return (
     <Paper className={classes.tableContainer}>
@@ -514,7 +503,7 @@ export default function CompaniesManager() {
     planId: "",
     status: true,
     campaignsEnabled: false,
-    dueDate: moment().add(1, "month").format("YYYY-MM-DD"),
+    dueDate: "",
     recurrence: "",
   });
 
@@ -533,7 +522,6 @@ export default function CompaniesManager() {
     }
     setLoading(false);
   };
-
 
   const handleSubmit = async (data) => {
     setLoading(true);
@@ -566,8 +554,6 @@ export default function CompaniesManager() {
     }
     setLoading(false);
   };
-
-
 
   const handleOpenDeleteDialog = () => {
     setShowConfirmDialog(true);

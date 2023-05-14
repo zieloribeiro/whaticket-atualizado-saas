@@ -7,10 +7,18 @@ import Tag from "../../models/Tag";
 import Whatsapp from "../../models/Whatsapp";
 
 const ShowTicketUUIDService = async (uuid: string): Promise<Ticket> => {
+try {
+  
+let obj;
+const uuidRegex = /^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[89abAB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$/;
+if (uuidRegex.test(uuid)) {
+  obj = { uuid };
+} else {
+  obj = { id: uuid };
+}
+
   const ticket = await Ticket.findOne({
-    where: {
-      uuid
-    },
+    where: obj,
     include: [
       {
         model: Contact,
@@ -46,6 +54,9 @@ const ShowTicketUUIDService = async (uuid: string): Promise<Ticket> => {
   }
 
   return ticket;
+} catch (error) {
+  throw new AppError('ShowTicketUUIDService: ' + error.message, error.statusCode);
+}
 };
 
 export default ShowTicketUUIDService;

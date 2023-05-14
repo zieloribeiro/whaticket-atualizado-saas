@@ -26,19 +26,20 @@ const ListMessagesService = async ({
   companyId,
   queues = []
 }: Request): Promise<Response> => {
+ try {
   const ticket = await ShowTicketService(ticketId, companyId);
+
 
   if (!ticket) {
     throw new AppError("ERR_NO_TICKET_FOUND", 404);
   }
 
-  // await setMessagesAsRead(ticket);
   const limit = 20;
   const offset = limit * (+pageNumber - 1);
 
   const options: FindOptions = {
     where: {
-      ticketId,
+      ticketId: ticket.id,
       companyId
     }
   };
@@ -79,6 +80,9 @@ const ListMessagesService = async ({
     count,
     hasMore
   };
+ } catch (error) {
+  throw new AppError("List", error.statusCode);
+ }
 };
 
 export default ListMessagesService;

@@ -13,7 +13,7 @@ import FindOrCreateATicketTrakingService from "./FindOrCreateATicketTrakingServi
 import GetTicketWbot from "../../helpers/GetTicketWbot";
 import { verifyMessage } from "../WbotServices/wbotMessageListener";
 import { isNil } from "lodash";
-import Whatsapp from "../../models/Whatsapp";
+import sendFaceMessage from "../FacebookServices/sendFacebookMessage";
 
 interface TicketData {
   status?: string;
@@ -63,7 +63,9 @@ const UpdateTicketService = async ({
       whatsappId: ticket.whatsappId
     });
 
-    await SetTicketMessagesAsRead(ticket);
+    if (ticket.channel === "whatsapp") {
+      SetTicketMessagesAsRead(ticket);
+    }
 
     const oldStatus = ticket.status;
     const oldUserId = ticket.user?.id;
@@ -71,8 +73,10 @@ const UpdateTicketService = async ({
 
     if (oldStatus === "closed") {
       await CheckContactOpenTickets(ticket.contact.id);
+      // queueId = null;
       chatbot = null;
       queueOptionId = null;
+      // userId = null;
     }
 
     if (status !== undefined && ["closed"].indexOf(status) > -1) {
@@ -81,13 +85,24 @@ const UpdateTicketService = async ({
         companyId
       );
 
-      if (setting?.value === "enabled") {
+      if (setting?.value === "enabled" && !ticket.isGroup) {
         if (ticketTraking.ratingAt == null) {
-          const ratingTxt = "Pesquisa da Satisfação";
-          let bodyRatingMessage = `\u200e${ratingTxt}\n\n`;
+
+
+          const ratingTxt = ratingMessage || "";
+          let bodyRatingMessage = `\u200c${ratingTxt}\n\n`;
           bodyRatingMessage +=
             "Digite de 1 à 3 para qualificar nosso atendimento:\n*1* - _Insatisfeito_\n*2* - _Satisfeito_\n*3* - _Muito Satisfeito_\n\n";
-          await SendWhatsAppMessage({ body: bodyRatingMessage, ticket });
+
+          if (ticket.channel === "whatsapp") {
+            const msg = await SendWhatsAppMessage({ body: bodyRatingMessage, ticket });
+
+            await verifyMessage(msg, ticket, ticket.contact, ticket.companyId);
+          }
+
+          if (["facebook", "instagram"].includes(ticket.channel)) {
+            await sendFaceMessage({ body: bodyRatingMessage, ticket });
+          }
 
           await ticketTraking.update({
             ratingAt: moment().toDate()
@@ -104,54 +119,54 @@ const UpdateTicketService = async ({
         }
         ticketTraking.ratingAt = moment().toDate();
         ticketTraking.rated = false;
-
-      if (!isNil(ratingMessage) && ratingMessage !== "") {
-        const body = `\u200e${ratingMessage}`;
-        await SendWhatsAppMessage({ body, ticket });
-
-      }    
-
-      }else{
-
-      if (!isNil(complationMessage) && complationMessage !== "") {
-        const body = `\u200e${complationMessage}`;
-        await SendWhatsAppMessage({ body, ticket });
       }
 
-    }
+      if (!isNil(complationMessage) && complationMessage !== "" && !ticket.isGroup) {
+        const body = `${complationMessage}`;
+        if (ticket.channel === "whatsapp") {
+          const msg = await SendWhatsAppMessage({ body, ticket });
+
+          await verifyMessage(msg, ticket, ticket.contact, ticket.companyId);
+
+        }
+
+        if (["facebook", "instagram"].includes(ticket.channel)) {
+          await sendFaceMessage({ body, ticket });
+        }
+      }
 
       ticketTraking.finishedAt = moment().toDate();
       ticketTraking.whatsappId = ticket.whatsappId;
       ticketTraking.userId = ticket.userId;
 
       queueId = null;
+      chatbot = null;
+      queueOptionId = null;
       userId = null;
     }
 
     if (queueId !== undefined && queueId !== null) {
       ticketTraking.queuedAt = moment().toDate();
-
-      
     }
 
-    if (oldQueueId !== queueId && !isNil(oldQueueId) && !isNil(queueId)) {
+    if (oldQueueId !== queueId && !isNil(oldQueueId) && !isNil(queueId) && !ticket.isGroup) {
       const queue = await Queue.findByPk(queueId);
-      let body = `\u200e${queue?.greetingMessage}`;
-      const wbot = await GetTicketWbot(ticket);
+      if (ticket.channel === "whatsapp") {
+        const wbot = await GetTicketWbot(ticket);
 
-      const queueChangedMessage = await wbot.sendMessage(
-        `${ticket.contact.number}@${
-          ticket.isGroup ? "g.us" : "s.whatsapp.net"
-        }`,
-        {
-          text: "\u200eVocê foi transferido, em breve iremos iniciar seu atendimento."
-        }
-      );
-      await verifyMessage(queueChangedMessage, ticket, ticket.contact);
+        const queueChangedMessage = await wbot.sendMessage(
+          `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
+          }`,
+          {
+            text: "\u200eVocê foi transferido, em breve iremos iniciar seu atendimento."
+          }
+        );
+        await verifyMessage(queueChangedMessage, ticket, ticket.contact, ticket.companyId);
+      }
 
-      // mensagem padrão desativada em caso de troca de fila
-      // const sentMessage = await wbot.sendMessage(`${ticket.contact.number}@c.us`, body);
-      // await verifyMessage(sentMessage, ticket, ticket.contact, companyId);
+      if (["facebook", "instagram"].includes(ticket.channel)) {
+        await sendFaceMessage({ body: "\u200eVocê foi transferido, em breve iremos iniciar seu atendimento.", ticket });
+      }
     }
 
     await ticket.update({

@@ -37,13 +37,6 @@ module.exports = {
                             updatedAt: new Date()
                         },
                         {
-                            key: "VerFilaCinza",
-                            value: "disabled",
-                            companyId: 1,
-                            createdAt: new Date(),
-                            updatedAt: new Date()
-                        },
-                        {
                             key:"call",
                             value: "disabled",
                             companyId: 1,

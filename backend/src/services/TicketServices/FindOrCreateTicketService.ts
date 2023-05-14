@@ -1,4 +1,3 @@
-import { subHours } from "date-fns";
 import { Op } from "sequelize";
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
@@ -22,7 +21,7 @@ const FindOrCreateTicketService = async (
   let ticket = await Ticket.findOne({
     where: {
       status: {
-        [Op.or]: ["open", "pending", "closed"]
+        [Op.or]: ["open", "pending"]
       },
       contactId: groupContact ? groupContact.id : contact.id,
       companyId
@@ -53,22 +52,18 @@ const FindOrCreateTicketService = async (
         ticketId: ticket.id,
         companyId,
         whatsappId: ticket.whatsappId,
-        userId: ticket.userId
+        userId: ticket.userId,
       });
     }
     const msgIsGroupBlock = await Setting.findOne({
       where: { key: "timeCreateNewTicket" }
     });
-  
-    const value = msgIsGroupBlock ? parseInt(msgIsGroupBlock.value, 10) : 7200;
+
   }
 
   if (!ticket && !groupContact) {
     ticket = await Ticket.findOne({
       where: {
-        updatedAt: {
-          [Op.between]: [+subHours(new Date(), 2), +new Date()]
-        },
         contactId: contact.id
       },
       order: [["updatedAt", "DESC"]]
@@ -99,12 +94,14 @@ const FindOrCreateTicketService = async (
       whatsappId,
       companyId
     });
+
     await FindOrCreateATicketTrakingService({
       ticketId: ticket.id,
       companyId,
       whatsappId,
       userId: ticket.userId
     });
+
   } else {
     await ticket.update({ whatsappId });
   }

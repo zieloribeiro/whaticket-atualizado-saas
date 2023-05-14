@@ -442,7 +442,6 @@ const CustomInput = (props) => {
               multiline
               className={classes.messageInput}
               maxRows={5}
-              readOnly={ticketStatus === 'closed'}
             />
           );
         }}

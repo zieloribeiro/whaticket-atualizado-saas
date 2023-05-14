@@ -1,5 +1,5 @@
 import {
-  AnyWASocket,
+  WASocket,
   BinaryNode,
   Contact as BContact,
 } from "@adiwajshing/baileys";
@@ -16,9 +16,8 @@ import { logger } from "../../utils/logger";
 import createOrUpdateBaileysService from "../BaileysServices/CreateOrUpdateBaileysService";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 
-type Session = AnyWASocket & {
+type Session = WASocket & {
   id?: number;
-  store?: Store;
 };
 
 interface IContact {
@@ -34,10 +33,6 @@ const wbotMonitor = async (
     wbot.ws.on("CB:call", async (node: BinaryNode) => {
       const content = node.content[0] as any;
 
-      if (content.tag === "offer") {
-        const { from, id } = node.attrs;
-        //console.log(`${from} is calling you with id ${id}`);
-      }
 
       if (content.tag === "terminate") {
         const sendMsgCall = await Setting.findOne({
@@ -73,7 +68,7 @@ const wbotMonitor = async (
 
           const body = `Chamada de voz/vídeo perdida às ${hours}:${minutes}`;
           const messageData = {
-            id: content.attrs["call-id"],
+            wid: content.attrs["call-id"],
             ticketId: ticket.id,
             contactId: contact.id,
             body,
@@ -100,17 +95,16 @@ const wbotMonitor = async (
       }
     });
 
+
+
     wbot.ev.on("contacts.upsert", async (contacts: BContact[]) => {
-      console.log("upsert", contacts);
       await createOrUpdateBaileysService({
         whatsappId: whatsapp.id,
         contacts,
       });
     });
 
-    wbot.ev.on("contacts.set", async (contacts: IContact) => {
-      console.log("set", contacts);
-    });
+
   } catch (err) {
     Sentry.captureException(err);
     logger.error(err);

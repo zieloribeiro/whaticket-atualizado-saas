@@ -15,6 +15,7 @@ interface Request {
   profilePicUrl?: string;
   companyId: number;
   extraInfo?: ExtraInfo[];
+  channel?: string;
 }
 
 const CreateOrUpdateContactService = async ({
@@ -24,7 +25,8 @@ const CreateOrUpdateContactService = async ({
   isGroup,
   email = "",
   companyId,
-  extraInfo = []
+  extraInfo = [],
+  channel = "whatsapp"
 }: Request): Promise<Contact> => {
   const number = isGroup ? rawNumber : rawNumber.replace(/[^0-9]/g, "");
 
@@ -34,7 +36,8 @@ const CreateOrUpdateContactService = async ({
   contact = await Contact.findOne({
     where: {
       number,
-      companyId
+      companyId,
+      channel
     }
   });
 
@@ -53,7 +56,8 @@ const CreateOrUpdateContactService = async ({
       email,
       isGroup,
       extraInfo,
-      companyId
+      companyId,
+      channel
     });
 
     io.emit(`company-${companyId}-contact`, {

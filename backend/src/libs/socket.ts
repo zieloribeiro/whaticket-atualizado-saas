@@ -2,7 +2,7 @@ import { Server as SocketIO } from "socket.io";
 import { Server } from "http";
 import AppError from "../errors/AppError";
 import { logger } from "../utils/logger";
-import User from "../models/User";
+import { userMonitor } from "../userMonitor";
 
 let io: SocketIO;
 
@@ -16,14 +16,6 @@ export const initIO = (httpServer: Server): SocketIO => {
   io.on("connection", async socket => {
     logger.info("Client Connected");
     const { userId } = socket.handshake.query;
-
-    if (userId && userId !== "undefined" && userId !== "null") {
-      const user = await User.findByPk(userId);
-      if (user) {
-        user.online = true;
-        await user.save();
-      }
-    }
 
     socket.on("joinChatBox", (ticketId: string) => {
       logger.info("A client joined a ticket channel");
@@ -39,6 +31,17 @@ export const initIO = (httpServer: Server): SocketIO => {
       logger.info(`A client joined to ${status} tickets channel.`);
       socket.join(status);
     });
+
+    userMonitor.add(
+      "UserConnection",
+      {
+        id: userId
+      },
+      {
+        removeOnComplete: { age: 60 * 60, count: 10 },
+        removeOnFail: { age: 60 * 60, count: 10 }
+      }
+    );
   });
   return io;
 };

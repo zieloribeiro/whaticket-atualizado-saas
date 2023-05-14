@@ -25,6 +25,8 @@ import TicketsQueueSelect from "../TicketsQueueSelect";
 import { Button } from "@material-ui/core";
 import { TagsFilter } from "../TagsFilter";
 import { UsersFilter } from "../UsersFilter";
+import AlarmIcon from '@material-ui/icons/Alarm';
+import HeadsetMicIcon from '@material-ui/icons/HeadsetMic';
 
 const useStyles = makeStyles((theme) => ({
   ticketsWrapper: {
@@ -84,7 +86,8 @@ const useStyles = makeStyles((theme) => ({
   },
 
   badge: {
-    right: "-10px",
+    right: "-2px",
+    position: "relative"
   },
   show: {
     display: "block",
@@ -182,7 +185,6 @@ const TicketsManagerTabs = () => {
       <NewTicketModal
         modalOpen={newTicketModalOpen}
         onClose={(ticket) => {
-          console.log("ticket", ticket);
           handleCloseOrOpenTicket(ticket);
         }}
       />
@@ -231,7 +233,7 @@ const TicketsManagerTabs = () => {
           <>
             <Button
               variant="outlined"
-              color="primary"
+              style={{ backgroundColor: "#38a0d6", color: "#ffffff" }}
               onClick={() => setNewTicketModalOpen(true)}
             >
               {i18n.t("ticketsManager.buttons.newTicket")}
@@ -281,7 +283,9 @@ const TicketsManagerTabs = () => {
                 badgeContent={openCount}
                 color="primary"
               >
-                {i18n.t("ticketsList.assignedHeader")}
+                <div style={{ textAlign: "center", display: "flex", alignItems: "center" }}>
+                  <HeadsetMicIcon style={{ fontSize: "22px", marginRight: "5px" }} />  {i18n.t("ticketsList.assignedHeader")}
+                </div>
               </Badge>
             }
             value={"open"}
@@ -293,7 +297,9 @@ const TicketsManagerTabs = () => {
                 badgeContent={pendingCount}
                 color="secondary"
               >
-                {i18n.t("ticketsList.pendingHeader")}
+                <div style={{ textAlign: "center", display: "flex", alignItems: "center" }}>
+                  <AlarmIcon style={{ fontSize: "22px", marginRight: "5px" }} /> {i18n.t("ticketsList.pendingHeader")}
+                </div>
               </Badge>
             }
             value={"pending"}
@@ -325,15 +331,27 @@ const TicketsManagerTabs = () => {
       <TabPanel value={tab} name="search" className={classes.ticketsWrapper}>
         <TagsFilter onFiltered={handleSelectedTags} />
         {profile === "admin" && (
-          <UsersFilter onFiltered={handleSelectedUsers} />
+          <>
+            <UsersFilter onFiltered={handleSelectedUsers} />
+            <TicketsList
+              searchParam={searchParam}
+              showAll={true}
+              tags={selectedTags}
+              users={selectedUsers}
+              selectedQueueIds={selectedQueueIds}
+            />
+          </>
         )}
-        <TicketsList
-          searchParam={searchParam}
-          showAll={true}
-          tags={selectedTags}
-          users={selectedUsers}
-          selectedQueueIds={selectedQueueIds}
-        />
+
+        {profile === "user" && (
+          <TicketsList
+            searchParam={searchParam}
+            showAll={false}
+            tags={selectedTags}
+            users={selectedUsers}
+            selectedQueueIds={selectedQueueIds}
+          />
+        )}
       </TabPanel>
     </Paper>
   );

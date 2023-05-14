@@ -23,7 +23,7 @@ type CompanyData = {
   name: string;
   id?: number;
   phone?: string;
-  email?: string;
+  email?: string; 
   status?: boolean;
   planId?: number;
   campaignsEnabled?: boolean;
@@ -37,13 +37,6 @@ type SchedulesData = {
 
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
-  const userId = req.user.id;
-  const requestUser = await User.findByPk(userId);
-
-  if (requestUser.super === false) {
-    throw new AppError("você nao tem permissão para este consulta");
-  }
-
   const { searchParam, pageNumber } = req.query as IndexQuery;
 
   const { companies, count, hasMore } = await ListCompaniesService({
@@ -55,14 +48,6 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
 };
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
-  const userId = req?.user?.id;
-  const requestUser = await User.findByPk(userId);
-
-  if (requestUser?.super === false || req.url !== "/companies/cadastro") {
-    throw new AppError("você nao tem permissão para este consulta");
-  }
-
-
   const newCompany: CompanyData = req.body;
 
   const schema = Yup.object().shape({
@@ -82,9 +67,6 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
-  const userId = req.user.id;
-  const requestUser = await User.findByPk(userId);
-
 
   const company = await ShowCompanyService(id);
 
@@ -92,12 +74,6 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
 };
 
 export const list = async (req: Request, res: Response): Promise<Response> => {
-  const userId = req.user.id;
-  const requestUser = await User.findByPk(userId);
-
-  if (requestUser.super === false) {
-    throw new AppError("você nao tem permissão para este consulta");
-  }
   const companies: Company[] = await FindAllCompaniesService();
 
   return res.status(200).json(companies);
@@ -107,13 +83,7 @@ export const update = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
-  const userId = req.user.id;
-  const requestUser = await User.findByPk(userId);
   const companyData: CompanyData = req.body;
-
-  if (requestUser.super === false) {
-    throw new AppError("você nao tem permissão para este consulta");
-  }
 
   const schema = Yup.object().shape({
     name: Yup.string()
@@ -136,12 +106,6 @@ export const updateSchedules = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
-  const userId = req.user.id;
-  const requestUser = await User.findByPk(userId);
-
-  if (requestUser.super === false) {
-    throw new AppError("você nao tem permissão para este consulta");
-  }
   const { schedules }: SchedulesData = req.body;
   const { id } = req.params;
 
@@ -157,12 +121,6 @@ export const remove = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
-  const userId = req.user.id;
-  const requestUser = await User.findByPk(userId);
-
-  if (requestUser.super === false) {
-    throw new AppError("você nao tem permissão para este consulta");
-  }
   const { id } = req.params;
 
   const company = await DeleteCompanyService(id);

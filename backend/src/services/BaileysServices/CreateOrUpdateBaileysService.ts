@@ -1,6 +1,5 @@
 import { Chat, Contact } from "@adiwajshing/baileys";
 import Baileys from "../../models/Baileys";
-import { isArray } from "lodash";
 
 interface Request {
   whatsappId: number;
@@ -8,41 +7,46 @@ interface Request {
   chats?: Chat[];
 }
 
+
+
 const createOrUpdateBaileysService = async ({
   whatsappId,
   contacts,
-  chats
+  chats,
 }: Request): Promise<Baileys> => {
+
   const baileysExists = await Baileys.findOne({
     where: { whatsappId }
   });
 
   if (baileysExists) {
     const getChats = baileysExists.chats
-      ? JSON.parse(JSON.stringify(baileysExists.chats))
+      ? JSON.parse(baileysExists.chats)
       : [];
     const getContacts = baileysExists.contacts
-      ? JSON.parse(JSON.stringify(baileysExists.contacts))
+      ? JSON.parse(baileysExists.contacts)
       : [];
 
-    if (chats && isArray(getChats)) {
+    if (chats) {
       getChats.push(...chats);
       getChats.sort();
-      getChats.filter((v, i, a) => a.indexOf(v) === i);
+      const newChats = getChats.filter((v: Chat, i: number, a: Chat[]) => a.findIndex(v2 => (v2.id === v.id)) === i)
+
+      return await baileysExists.update({
+        chats: JSON.stringify(newChats),
+      });
     }
 
-    if (contacts && isArray(getContacts)) {
+    if (contacts) {
       getContacts.push(...contacts);
       getContacts.sort();
-      getContacts.filter((v, i, a) => a.indexOf(v) === i);
+      const newContacts = getContacts.filter((v: Contact, i: number, a: Contact[]) => a.findIndex(v2 => (v2.id === v.id)) === i)
+
+      return await baileysExists.update({
+        contacts: JSON.stringify(newContacts),
+      });
     }
 
-    const newBaileys = await baileysExists.update({
-      chats: JSON.stringify(getChats),
-      contacts: JSON.stringify(getContacts)
-    });
-
-    return newBaileys;
   }
 
   const baileys = await Baileys.create({
@@ -50,7 +54,7 @@ const createOrUpdateBaileysService = async ({
     contacts: JSON.stringify(contacts),
     chats: JSON.stringify(chats)
   });
-
+  await new Promise(resolve => setTimeout(resolve, 1000));
   return baileys;
 };
 

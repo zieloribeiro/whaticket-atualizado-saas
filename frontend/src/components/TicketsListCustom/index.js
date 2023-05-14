@@ -12,10 +12,6 @@ import { i18n } from "../../translate/i18n";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { socketConnection } from "../../services/socket";
 
-import api from "../../services/api";
-import toastError from "../../errors/toastError";
-
-
 const useStyles = makeStyles((theme) => ({
   ticketsListWrapper: {
     position: "relative",
@@ -189,58 +185,14 @@ const TicketsListCustom = (props) => {
     queueIds: JSON.stringify(selectedQueueIds),
   });
 
-
-
-
-  const [VerFilaCinza, setVerFilaCinzaType] = useState("disabled");
-
-
   useEffect(() => {
-
-    const fetchVerFilaCinza = async () => {
-      try {
-        const { data } = await api.get("/settings/VerFilaCinza");
-
-
-        if (data.value === "enabled") {
-          setVerFilaCinzaType("enabled")
-        } else {
-          setVerFilaCinzaType("disabled")
-        }
-
-      } catch (err) {
-        setVerFilaCinzaType("disabled")
-        toastError(err);
-      }
-    };
-
-    fetchVerFilaCinza();
-
-
-
     const queueIds = queues.map((q) => q.id);
     const filteredTickets = tickets.filter(
       (t) => queueIds.indexOf(t.queueId) > -1
     );
 
     if (profile === "user") {
-
-      if (VerFilaCinza == "enabled") {// se desabilitar ver fila cinza para user
-
-        if (status === "closed") {
-          dispatch({ type: "LOAD_TICKETS", payload: tickets });
-        } else {
-          dispatch({ type: "LOAD_TICKETS", payload: filteredTickets });
-        }
-
-      } else {
-
-        dispatch({ type: "LOAD_TICKETS", payload: filteredTickets });
-
-      }
-
-
-
+      dispatch({ type: "LOAD_TICKETS", payload: filteredTickets });
     } else {
       dispatch({ type: "LOAD_TICKETS", payload: tickets });
     }

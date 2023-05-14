@@ -18,7 +18,6 @@ const MessageSchema = Yup.object().shape({
 		.required("Required"),
     message: Yup.string()
         .min(3, "Too Short!")
-        .max(500, "Too Long!")
         .required("Required")
 });
 

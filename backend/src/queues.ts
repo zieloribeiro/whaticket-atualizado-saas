@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/node";
-import Queue from "bull";
+import Queue, { Job } from "bull";
 import { MessageData, SendMessage } from "./helpers/SendMessage";
 import Whatsapp from "./models/Whatsapp";
 import { logger } from "./utils/logger";
@@ -32,6 +32,13 @@ const limiterDuration = process.env.REDIS_OPT_LIMITER_DURATION || 3000;
 interface ProcessCampaignData {
   id: number;
   delay: number;
+}
+
+interface CampaignSettings {
+  messageInterval: number;
+  longerIntervalAfter: number;
+  greaterInterval: number;
+  variables: any[];
 }
 
 interface PrepareContactData {
@@ -164,7 +171,7 @@ async function handleVerifyCampaigns(job) {
   const campaigns: { id: number; scheduledAt: string }[] =
     await sequelize.query(
       `select id, "scheduledAt" from "Campaigns" c
-    where "scheduledAt" between now() and now() + '1 hour'::interval and status = 'PROGRAMADA'`,
+    where "scheduledAt" between now() and now() + '3 hour'::interval and status = 'PROGRAMADA'`,
       { type: QueryTypes.SELECT }
     );
   logger.info(`Campanhas encontradas: ${campaigns.length}`);
@@ -183,7 +190,9 @@ async function handleVerifyCampaigns(job) {
           delay
         },
         {
-          removeOnComplete: true
+          priority: 3,
+          removeOnComplete: { age: 60 * 60, count: 10 },
+          removeOnFail: { age: 60 * 60, count: 10 }
         }
       );
     } catch (err: any) {
@@ -193,7 +202,8 @@ async function handleVerifyCampaigns(job) {
 }
 
 async function getCampaign(id) {
-  return await Campaign.findByPk(id, {
+  return await Campaign.findOne({
+    where: { id },
     include: [
       {
         model: ContactList,
@@ -213,14 +223,15 @@ async function getCampaign(id) {
         as: "whatsapp",
         attributes: ["id", "name"]
       },
-      {
-        model: CampaignShipping,
-        as: "shipping",
-        include: [{ model: ContactListItem, as: "contact" }]
-      }
+      // {
+      //   model: CampaignShipping,
+      //   as: "shipping",
+      //   include: [{ model: ContactListItem, as: "contact" }]
+      // }
     ]
   });
 }
+
 
 async function getContact(id) {
   return await ContactListItem.findByPk(id, {
@@ -228,39 +239,40 @@ async function getContact(id) {
   });
 }
 
-async function getSettings(campaign) {
-  const settings = await CampaignSetting.findAll({
-    where: { companyId: campaign.companyId },
-    attributes: ["key", "value"]
-  });
-
-  let messageInterval: number = 20;
-  let longerIntervalAfter: number = 20;
-  let greaterInterval: number = 60;
-  let variables: any[] = [];
-
-  settings.forEach(setting => {
-    if (setting.key === "messageInterval") {
-      messageInterval = JSON.parse(setting.value);
-    }
-    if (setting.key === "longerIntervalAfter") {
-      longerIntervalAfter = JSON.parse(setting.value);
-    }
-    if (setting.key === "greaterInterval") {
-      greaterInterval = JSON.parse(setting.value);
-    }
-    if (setting.key === "variables") {
-      variables = JSON.parse(setting.value);
-    }
-  });
-
-  return {
-    messageInterval,
-    longerIntervalAfter,
-    greaterInterval,
-    variables
-  };
+interface CampaignSettings {
+  messageInterval: number;
+  longerIntervalAfter: number;
+  greaterInterval: number;
+  variables: any[];
 }
+
+async function getSettings(campaign): Promise<CampaignSettings> {
+  try {
+    const settings = await CampaignSetting.findAll({
+      where: { companyId: campaign.companyId },
+      attributes: ["key", "value"]
+    });
+
+    const parsedSettings: Record<string, unknown> = settings.reduce((acc, setting) => {
+      acc[setting.key] = JSON.parse(setting.value);
+      return acc;
+    }, {});
+
+    const { messageInterval = 20, longerIntervalAfter = 20, greaterInterval = 60, variables = [] } = parsedSettings;
+
+    return {
+      messageInterval: messageInterval as number,
+      longerIntervalAfter: longerIntervalAfter as number,
+      greaterInterval: greaterInterval as number,
+      variables: variables as any[]
+    };
+  } catch (error) {
+    console.log(error);
+    throw error; // rejeita a Promise com o erro original
+  }
+}
+
+
 
 export function parseToMilliseconds(seconds) {
   return seconds * 1000;
@@ -405,40 +417,33 @@ async function verifyAndFinalizeCampaign(campaign) {
 async function handleProcessCampaign(job) {
   try {
     const { id }: ProcessCampaignData = job.data;
-    let { delay }: ProcessCampaignData = job.data;
     const campaign = await getCampaign(id);
     const settings = await getSettings(campaign);
     if (campaign) {
       const { contacts } = campaign.contactList;
       if (isArray(contacts)) {
-        let index = 0;
-        for (let contact of contacts) {
-          campaignQueue.add(
+        const contactData = contacts.map(contact => ({
+          contactId: contact.id,
+          campaignId: campaign.id,
+          variables: settings.variables,
+        }));
+        const baseDelay = job.data.delay || 0;
+        const longerIntervalAfter = settings.longerIntervalAfter;
+        const greaterInterval = parseToMilliseconds(settings.greaterInterval);
+        const messageInterval = parseToMilliseconds(settings.messageInterval);
+        const queuePromises = [];
+        for (let i = 0; i < contactData.length; i++) {
+          const { contactId, campaignId, variables } = contactData[i];
+          const delay = calculateDelay(i, baseDelay, longerIntervalAfter, greaterInterval, messageInterval);
+          const queuePromise = campaignQueue.add(
             "PrepareContact",
-            {
-              contactId: contact.id,
-              campaignId: campaign.id,
-              variables: settings.variables,
-              delay: delay || 0
-            },
-            {
-              removeOnComplete: true
-            }
+            { contactId, campaignId, variables, delay },
+            { removeOnComplete: true }
           );
-
-          logger.info(
-            `Registro enviado pra fila de disparo: Campanha=${campaign.id};Contato=${contact.name};delay=${delay}`
-          );
-          index++;
-          if (index % settings.longerIntervalAfter === 0) {
-            //intervalo maior após intervalo configurado de mensagens
-            delay += parseToMilliseconds(settings.greaterInterval);
-          } else {
-            delay += parseToMilliseconds(
-              randomValue(0, settings.messageInterval)
-            );
-          }
+          queuePromises.push(queuePromise);
+          logger.info(`Registro enviado pra fila de disparo: Campanha=${campaign.id};Contato=${contacts[i].name};delay=${delay}`);
         }
+        await Promise.all(queuePromises);
         await campaign.update({ status: "EM_ANDAMENTO" });
       }
     }
@@ -446,6 +451,15 @@ async function handleProcessCampaign(job) {
     Sentry.captureException(err);
   }
 }
+
+function calculateDelay(index, baseDelay, longerIntervalAfter, greaterInterval, messageInterval) {
+  if (index % longerIntervalAfter === 0) {
+    return baseDelay + (index / longerIntervalAfter) * greaterInterval;
+  } else {
+    return baseDelay + randomValue(0, messageInterval);
+  }
+}
+
 
 async function handlePrepareContact(job) {
   try {
@@ -533,6 +547,21 @@ async function handleDispatchCampaign(job) {
     const { campaignShippingId, campaignId }: DispatchCampaignData = data;
     const campaign = await getCampaign(campaignId);
     const wbot = await GetWhatsappWbot(campaign.whatsapp);
+
+    if (!wbot) {
+      logger.error(`campaignQueue -> DispatchCampaign -> error: wbot not found`);
+      return;
+    }
+
+    if (!campaign.whatsapp) {
+      logger.error(`campaignQueue -> DispatchCampaign -> error: whatsapp not found`);
+      return;
+    }
+
+    if (!wbot?.user?.id) {
+      logger.error(`campaignQueue -> DispatchCampaign -> error: wbot user not found`);
+      return;
+    }
 
     logger.info(
       `Disparo de campanha solicitado: Campanha=${campaignId};Registro=${campaignShippingId}`
@@ -624,43 +653,14 @@ async function handleInvoiceCreate() {
           { type: QueryTypes.SELECT }
         );
         if (invoice[0]['mycount'] > 0) {
-          
+
         } else {
           const sql = `INSERT INTO "Invoices" (detail, status, value, "updatedAt", "createdAt", "dueDate", "companyId")
           VALUES ('${plan.name}', 'open', '${plan.value}', '${timestamp}', '${timestamp}', '${date}', ${c.id});`
 
-          const invoiceInsert = await sequelize.query(sql,
+          await sequelize.query(sql,
             { type: QueryTypes.INSERT }
           );
-
-/*           let transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-              user: 'email@gmail.com',
-              pass: 'senha'
-            }
-          });
-
-          const mailOptions = {
-            from: 'heenriquega@gmail.com', // sender address
-            to: `${c.email}`, // receiver (use array of string for a list)
-            subject: 'Fatura gerada - Sistema', // Subject line
-            html: `Olá ${c.name} esté é um email sobre sua fatura!<br>
-<br>
-Vencimento: ${vencimento}<br>
-Valor: ${plan.value}<br>
-Link: ${process.env.FRONTEND_URL}/financeiro<br>
-<br>
-Qualquer duvida estamos a disposição!
-            `// plain text body
-          };
-
-          transporter.sendMail(mailOptions, (err, info) => {
-            if (err)
-              console.log(err)
-            else
-              console.log(info);
-          }); */
 
         }
 
@@ -687,7 +687,7 @@ export async function startQueueProcess() {
 
   sendScheduledMessages.process("SendMessage", handleSendScheduledMessage);
 
-  campaignQueue.process("VerifyCampaigns", handleVerifyCampaigns);
+  campaignQueue.process("VerifyCampaignsDaatabase", handleVerifyCampaigns);
 
   campaignQueue.process("ProcessCampaign", handleProcessCampaign);
 
@@ -710,7 +710,7 @@ export async function startQueueProcess() {
   );
 
   campaignQueue.add(
-    "VerifyCampaigns",
+    "VerifyCampaignsDaatabase",
     {},
     {
       repeat: { cron: "*/20 * * * * *" },

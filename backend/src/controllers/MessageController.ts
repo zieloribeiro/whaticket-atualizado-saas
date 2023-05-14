@@ -16,6 +16,9 @@ import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
 import CheckContactNumber from "../services/WbotServices/CheckNumber";
 import CheckIsValidContact from "../services/WbotServices/CheckIsValidContact";
 
+import {sendFacebookMessageMedia} from "../services/FacebookServices/sendFacebookMessageMedia";
+import sendFaceMessage from "../services/FacebookServices/sendFacebookMessage";
+
 type IndexQuery = {
   pageNumber: string;
 };
@@ -50,7 +53,9 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     queues
   });
 
-  SetTicketMessagesAsRead(ticket);
+  if (ticket.channel === "whatsapp") {
+    SetTicketMessagesAsRead(ticket);
+  }
 
   return res.json({ count, messages, ticket, hasMore });
 };
@@ -62,17 +67,41 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
 
   const ticket = await ShowTicketService(ticketId, companyId);
-
-  SetTicketMessagesAsRead(ticket);
+  const { channel } = ticket;
+  if (channel === "whatsapp") {
+    SetTicketMessagesAsRead(ticket);
+  }
 
   if (medias) {
-    await Promise.all(
-      medias.map(async (media: Express.Multer.File) => {
-        await SendWhatsAppMedia({ media, ticket });
-      })
-    );
+    if (channel === "whatsapp") {
+      await Promise.all(
+        medias.map(async (media: Express.Multer.File) => {
+          await SendWhatsAppMedia({ media, ticket });
+        })
+      );
+    }
+
+    if (["facebook", "instagram"].includes(channel)) {
+      await Promise.all(
+        medias.map(async (media: Express.Multer.File) => {
+          await sendFacebookMessageMedia({ media, ticket });
+        })
+      );
+    }
+
+
   } else {
-    await SendWhatsAppMessage({ body, ticket, quotedMsg });
+
+
+
+    if (["facebook", "instagram"].includes(channel)) {
+      await sendFaceMessage({ body, ticket, quotedMsg });
+    }
+
+    if (channel === "whatsapp") {
+      await SendWhatsAppMessage({ body, ticket, quotedMsg });
+    }
+
   }
 
   return res.send();

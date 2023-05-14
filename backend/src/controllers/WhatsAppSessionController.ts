@@ -1,8 +1,11 @@
 import { Request, Response } from "express";
-import { getWbot } from "../libs/wbot";
+import { getWbot, removeWbot } from "../libs/wbot";
 import ShowWhatsAppService from "../services/WhatsappService/ShowWhatsAppService";
 import { StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSession";
 import UpdateWhatsAppService from "../services/WhatsappService/UpdateWhatsAppService";
+import DeleteBaileysService from "../services/BaileysServices/DeleteBaileysService";
+import DeleteWhatsAppService from "../services/WhatsappService/DeleteWhatsAppService";
+import { cacheLayer } from "../libs/cache";
 
 const store = async (req: Request, res: Response): Promise<Response> => {
   const { whatsappId } = req.params;
@@ -24,7 +27,9 @@ const update = async (req: Request, res: Response): Promise<Response> => {
     whatsappData: { session: "" }
   });
 
-  await StartWhatsAppSession(whatsapp, companyId);
+  if(whatsapp.channel === "whatsapp") {
+    await StartWhatsAppSession(whatsapp, companyId);
+  }
 
   return res.status(200).json({ message: "Starting session." });
 };
@@ -32,12 +37,17 @@ const update = async (req: Request, res: Response): Promise<Response> => {
 const remove = async (req: Request, res: Response): Promise<Response> => {
   const { whatsappId } = req.params;
   const { companyId } = req.user;
-  const whatsapp = await ShowWhatsAppService(whatsappId, companyId);
 
-  if (whatsapp.session) {
-    await whatsapp.update({ status: "DISCONNECTED", session: "" });
+  const whatsapp = await ShowWhatsAppService(whatsappId, companyId );
+
+  if(whatsapp.channel === "whatsapp"){
     const wbot = getWbot(whatsapp.id);
-    await wbot.logout();
+    wbot.logout();
+    wbot.ws.close();
+  }
+
+  if(whatsapp.channel === "facebook" || whatsapp.channel === "instagram") {
+    whatsapp.destroy();
   }
 
   return res.status(200).json({ message: "Session disconnected." });
