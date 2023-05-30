@@ -4,7 +4,7 @@ import {
   AuthenticationState,
   initAuthCreds,
   BufferJSON
-} from "@adiwajshing/baileys";
+} from "@whiskeysockets/baileys";
 import Whatsapp from "../models/Whatsapp";
 import { cacheLayer } from "../libs/cache";
 

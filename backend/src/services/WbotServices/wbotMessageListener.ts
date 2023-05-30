@@ -18,7 +18,7 @@ import {
   WAMessageStubType,
   WAMessageUpdate,
   delay,
-} from "@adiwajshing/baileys";
+} from "@whiskeysockets/baileys";
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
@@ -509,6 +509,7 @@ const downloadMedia = async (msg: proto.IWebMessageInfo) => {
     msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage ||
     msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.videoMessage;
 
+
   let messageType = mineType.mimetype
     .split("/")[0]
     .replace("application", "document")
@@ -633,7 +634,7 @@ const verifyQuotedMessage = async (
   return quotedMsg;
 };
 
-const verifyMediaMessage = async (
+export const verifyMediaMessage = async (
   msg: proto.IWebMessageInfo,
   ticket: Ticket,
   contact: Contact,
@@ -779,6 +780,7 @@ const isValidMsg = (msg: proto.IWebMessageInfo): boolean => {
       msgType === "viewOnceMessage" ||
       msgType === "documentWithCaptionMessage";
 
+      console.log('tipo', ifType)
 
     if (!ifType) {
       logger.warn(`#### Nao achou o type em isValidMsg: ${msgType}
@@ -1432,7 +1434,6 @@ const handleMessage = async (
     const msgType = getTypeMessage(msg);
 
     if (msgType === "protocolMessage") return; // Tratar isso no futuro para excluir msgs se vor REVOKE
-
     const hasMedia =
       msg.message?.audioMessage ||
       msg.message?.imageMessage ||
@@ -1596,6 +1597,7 @@ const handleMessage = async (
 
 
     if (hasMedia) {
+      console.log('entrou aqui')
       await verifyMediaMessage(msg, ticket, contact, ticket.companyId);
     } else {
       await verifyMessage(msg, ticket, contact, ticket.companyId);

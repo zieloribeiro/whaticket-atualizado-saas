@@ -251,7 +251,7 @@ const verifyQueue = async (
     });
 
 
-    const textMessage = formatBody(`\u200e${greetingMessage}\n\n${options}`, contact)
+    const textMessage = formatBody(`${greetingMessage}\n\n${options}`, contact)
 
     await sendFaceMessage({
       ticket,
@@ -316,7 +316,7 @@ const verifyQueue = async (
         }
       }
 
-      const body = formatBody(`\u200e${choosenQueue.greetingMessage}`, ticket.contact
+      const body = formatBody(`${choosenQueue.greetingMessage}`, ticket.contact
       );
       const sentMessage = await sendFaceMessage({
         ticket,
@@ -377,7 +377,7 @@ const handleChartbot = async (ticket: Ticket, msg: string, wbot: any, dontReadTh
       }
 
 
-      const body = formatBody(`\u200e${ticket.queue.greetingMessage}`, ticket.contact
+      const body = formatBody(`${ticket.queue.greetingMessage}`, ticket.contact
       );
       // const sentMessage = await wbot.sendMessage(
       //   `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`, {
@@ -461,7 +461,7 @@ const handleChartbot = async (ticket: Ticket, msg: string, wbot: any, dontReadTh
       });
       options += `\n*[ # ]* - Voltar Menu Inicial`;
 
-      const textMessage = formatBody(`\u200e${queue.greetingMessage}\n\n${options}`, ticket.contact)
+      const textMessage = formatBody(`${queue.greetingMessage}\n\n${options}`, ticket.contact)
 
       // const sendMsg = await wbot.sendMessage(
       //   `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`,
@@ -502,7 +502,7 @@ const handleChartbot = async (ticket: Ticket, msg: string, wbot: any, dontReadTh
 
         await sendFaceMessage({
           ticket,
-          body: formatBody(`\u200e${currentOption.message}\n\n${options}`, ticket.contact)
+          body: formatBody(`${currentOption.message}\n\n${options}`, ticket.contact)
         })
 
       };
@@ -542,7 +542,7 @@ export const handleMessage = async (
 
 
     if (fromMe) {
-      // if (/\u200e/.test(message.text)) return;
+      // if (//.test(message.text)) return;
       msgContact = await profilePsid(recipientPsid, token.facebookUserToken);
     } else {
       msgContact = await profilePsid(senderPsid, token.facebookUserToken);
@@ -678,7 +678,7 @@ export const handleRating = async (
       userId: ticketTraking.userId,
       rate: finalRate,
     });
-    const body = formatBody(`\u200e${complationMessage}`, ticket.contact);
+    const body = formatBody(`${complationMessage}`, ticket.contact);
 
     await sendFaceMessage({
       ticket,

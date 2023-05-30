@@ -1,4 +1,4 @@
-import { WAMessage, AnyMessageContent } from "@adiwajshing/baileys";
+import { WAMessage, AnyMessageContent } from "@whiskeysockets/baileys";
 import * as Sentry from "@sentry/node";
 import fs from "fs";
 import { exec } from "child_process";
@@ -8,6 +8,7 @@ import AppError from "../../errors/AppError";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
 import Ticket from "../../models/Ticket";
 import mime from "mime-types";
+import { verifyMediaMessage } from "./wbotMessageListener";
 
 interface Request {
   media: Express.Multer.File;
@@ -174,6 +175,10 @@ const SendWhatsAppMedia = async ({
     );
 
     await ticket.update({ lastMessage: media.filename });
+
+    if(sentMessage.message?.documentMessage) {
+      verifyMediaMessage(sentMessage, ticket, ticket.contact, ticket.companyId)
+    }
 
     return sentMessage;
   } catch (err) {
