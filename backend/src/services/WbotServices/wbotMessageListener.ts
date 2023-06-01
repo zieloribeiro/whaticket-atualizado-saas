@@ -540,7 +540,7 @@ const downloadMedia = async (msg: proto.IWebMessageInfo) => {
         msg.message.stickerMessage ||
         msg.message.extendedTextMessage?.contextInfo.quotedMessage
           .imageMessage ||
-          msg.message.extendedTextMessage?.contextInfo.quotedMessage
+        msg.message.extendedTextMessage?.contextInfo.quotedMessage
           .videoMessage ||
         msg.message?.buttonsMessage?.imageMessage ||
         msg.message?.templateMessage?.fourRowTemplate?.imageMessage ||
@@ -735,6 +735,11 @@ export const verifyMessage = async (
   await ticket.update({
     lastMessage: body,
   });
+
+  if (messageData.remoteJid.includes("g.us")) {
+    messageData.ack = 3;
+  }
+
   try {
     await CreateMessageService({
       messageData,
@@ -747,7 +752,7 @@ export const verifyMessage = async (
 
 
 const isValidMsg = (msg: proto.IWebMessageInfo): boolean => {
- if (msg.key.remoteJid === "status@broadcast") return false;
+  if (msg.key.remoteJid === "status@broadcast") return false;
   try {
     const msgType = getTypeMessage(msg);
     if (!msgType) {
@@ -780,7 +785,7 @@ const isValidMsg = (msg: proto.IWebMessageInfo): boolean => {
       msgType === "viewOnceMessage" ||
       msgType === "documentWithCaptionMessage";
 
-      console.log('tipo', ifType)
+    console.log('tipo', ifType)
 
     if (!ifType) {
       logger.warn(`#### Nao achou o type em isValidMsg: ${msgType}
@@ -1925,7 +1930,7 @@ const verifyCampaignMessageAndCloseTicket = async (
       where: { wid: message.key.id!, companyId },
     });
 
-    if(!messageRecord) return
+    if (!messageRecord) return
     const ticket = await Ticket.findByPk(messageRecord.ticketId);
     await ticket.update({ status: "closed" });
 
@@ -1972,23 +1977,23 @@ const wbotMessageListener = async (wbot: Session, companyId: number): Promise<vo
 
       messages.forEach(async (message: proto.IWebMessageInfo) => {
 
-        if (
-          !message.key.fromMe &&
-          messageUpsert.type === "notify"
-        ) {
-          (wbot as WASocket)!.readMessages([message.key]);
-        }
+        // if (
+        //   !message.key.fromMe &&
+        //   messageUpsert.type === "notify"
+        // ) {
+        //   (wbot as WASocket)!.readMessages([message.key]);
+        // }
 
         const messageExists = await Message.count({
           where: { wid: message.key.id!, companyId }
         });
-        
+
         if (!messageExists) {
 
           const body = await getBodyMessage(message);
           const isCampaign = /\u200c/.test(body);
 
-          if(!isCampaign) {
+          if (!isCampaign) {
             await handleMessage(message, wbot, companyId);
           }
 
@@ -2002,8 +2007,14 @@ const wbotMessageListener = async (wbot: Session, companyId: number): Promise<vo
       if (messageUpdate.length === 0) return;
       messageUpdate.forEach(async (message: WAMessageUpdate) => {
 
+        let ack: any;
+        if (message.update.status === 3 && message?.key?.fromMe) {
+          ack = 2;
+        } else {
+          ack = message.update.status;
+        }
 
-        handleMsgAck(message, message.update.status);
+        handleMsgAck(message, ack);
       });
     });
 
